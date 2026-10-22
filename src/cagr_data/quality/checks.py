@@ -165,28 +165,43 @@ def check_prev_close_continuity(c: Ctx) -> CheckResult:
     )
 
 
+def _actions(c: Ctx, where: str) -> list[dict[str, Any]]:
+    return [
+        dict(r)
+        for r in c.conn.execute(
+            "SELECT ca.action_id, ca.ex_date, ca.kind, ca.subject_raw, "
+            "(SELECT ticker FROM ref.listing_symbol s WHERE s.listing_id = ca.listing_id "
+            " ORDER BY s.valid_from DESC LIMIT 1) AS ticker "
+            "FROM clean.corporate_action ca JOIN ref.listing l USING (listing_id) "
+            f"WHERE l.venue_id = %(venue)s AND ca.status = 'proposed' AND ({where}) ORDER BY ca.ex_date",
+            _p(c),
+        )
+    ]
+
+
 def check_ca_needs_review(c: Ctx) -> CheckResult:
-    n = _one(
-        c.conn,
-        "SELECT count(*) FROM clean.corporate_action ca JOIN ref.listing l USING (listing_id) "
-        "WHERE l.venue_id = %(venue)s AND ca.parse_status = 'needs_review' AND ca.status = 'proposed' "
+    # Critical only for what is about to matter: an unparsed action going ex in the next three sessions,
+    # or tonight's session on a nightly run. One already in the past is history a backfill reports and
+    # does not block on (Arush, 2026-10-22); pending_corporate_actions lists it until someone resolves it.
+    rows = _actions(
+        c,
+        f"ca.parse_status = 'needs_review' AND ca.ex_date {'>=' if c.nightly else '>'} %(session)s "
         "AND ca.ex_date <= (SELECT coalesce(max(session_date), %(session)s) FROM (SELECT session_date "
         "FROM ref.calendar_session WHERE calendar_id = %(cal)s AND session_date > %(session)s "
         "ORDER BY session_date LIMIT 3) s)",
-        _p(c),
     )
-    return CheckResult("ca_needs_review", n == 0, float(n))
+    return CheckResult("ca_needs_review", not rows, float(len(rows)), {"actions": rows[:50]})
 
 
 def check_pending_corporate_actions(c: Ctx) -> CheckResult:
-    n = _one(
-        c.conn,
-        "SELECT count(*) FROM clean.corporate_action ca JOIN ref.listing l USING (listing_id) "
-        "WHERE l.venue_id = %(venue)s AND ca.status = 'proposed' AND ca.parse_status <> 'needs_review' "
-        "AND ca.ex_date <= %(session)s",
-        _p(c),
+    """Every action still proposed after its ex-date, unparsed ones included: the review backlog."""
+    rows = _actions(c, "ca.ex_date <= %(session)s")
+    return CheckResult(
+        "pending_corporate_actions",
+        not rows,
+        float(len(rows)),
+        {"actions": rows[:200]},
     )
-    return CheckResult("pending_corporate_actions", n == 0, float(n))
 
 
 def check_pending_listing_changes(c: Ctx) -> CheckResult:
@@ -228,7 +243,7 @@ def check_history_drift(c: Ctx) -> CheckResult:
 
 def check_feed_freshness(c: Ctx) -> CheckResult:
     stale = c.conn.execute(
-        "SELECT code FROM ops.feed_freshness ff JOIN ref.feed f USING (feed_id) "
+        "SELECT f.code FROM ops.feed_freshness ff JOIN ref.feed f USING (feed_id) "
         "WHERE f.venue_id = %(venue)s AND ff.is_stale AND f.dataset = 'eod_bar' AND f.priority = 1",
         _p(c),
     ).fetchall()

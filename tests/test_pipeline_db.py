@@ -230,3 +230,34 @@ def test_changed_migration_is_refused(test_url: str, tmp_path: Path) -> None:
     with pytest.raises(RuntimeError, match="changed after it was applied"):
         migrate.migrate(test_url, mdir)
     migrate.reset(test_url)
+
+
+def test_past_review_items_warn_upcoming_ones_block(fresh_db: Conn, nse_files: Path, tmp_path: Path) -> None:
+    """A rights issue in the window's past does not stop a backfill; one about to go ex stops the night."""
+    conn = fresh_db
+    fx.write_corporate_actions(nse_files, fx.START, fx.END, extra=[
+        {"symbol": "INFY", "series": "EQ", "ind": "-", "faceVal": "5", "subject": "Rights 1:10 @ Premium Rs 900/-",
+         "exDate": "08-Oct-2026", "recDate": "08-Oct-2026", "isin": "INE009A01021"},
+    ])  # fmt: skip
+    res = _bootstrap(conn, nse_files, tmp_path / "lake")
+    assert res.lake_files > 0
+    assert res.checks["ca_needs_review"] is True and res.checks["pending_corporate_actions"] is False
+    pending = _one(conn, "SELECT detail FROM ops.dq_result WHERE check_code = 'pending_corporate_actions'")
+    assert [a["ticker"] for a in pending["actions"]] == ["INFY"]
+
+    # the next session's file, and a demerger going ex the session after it
+    d = date(2026, 10, 26)
+    prev: dict[str, float] = {}
+    for k, s in enumerate(fx.sessions()):
+        fx.bhavcopy_rows(s, k, prev)
+    fx.write_bhavcopy(nse_files, d, len(fx.sessions()), prev)
+    conn.execute(
+        "INSERT INTO clean.corporate_action (listing_id, ex_date, kind, source, subject_raw, parse_status) "
+        "VALUES (%s, '2026-10-27', 'other', 'exchange', 'Demerger', 'needs_review')",
+        (_listing(conn, "INE467B01029"),),
+    )
+    with pytest.raises(DataQualityError) as err:
+        pipeline.eod(
+            conn, pipeline.Fetchers.offline(nse_files), d, d, nightly=True, lake_root=tmp_path / "lake"
+        )
+    assert "ca_needs_review" in str(err.value)
