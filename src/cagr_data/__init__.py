@@ -1,0 +1,1 @@
+"""Cagr data platform."""

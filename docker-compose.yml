@@ -1,0 +1,28 @@
+# Local Postgres 17 for development and tests. Two databases on one server:
+#   cagr_dev   - your working copy, filled by `cagr migrate` and the pipeline commands
+#   cagr_test  - wiped and rebuilt by the integration tests
+# Start:  docker compose up -d db      Stop: docker compose down      Wipe: docker compose down -v
+services:
+  db:
+    image: ${POSTGRES_IMAGE:-postgres:17}
+    container_name: cagr-data-db
+    environment:
+      POSTGRES_USER: cagr
+      POSTGRES_PASSWORD: cagr
+      POSTGRES_DB: cagr_dev
+      TZ: UTC
+    ports:
+      - "${CAGR_DB_PORT:-54329}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/initdb:/docker-entrypoint-initdb.d:ro
+    command: ["postgres", "-c", "shared_preload_libraries=pg_stat_statements", "-c", "max_wal_size=4GB"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cagr -d cagr_dev"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    shm_size: 512mb
+
+volumes:
+  pgdata:
