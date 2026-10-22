@@ -61,9 +61,11 @@ Each of these is a migration in `migrations/`, so the difference is visible in o
 - **The coverage check's cohort** is "listings that traded in the previous 5 sessions", a stand-in until the
   universe tables are filled.
 - **Index feed, market cap, universe membership** are not loaded yet (D5, D6).
-- **Rights issues, demergers and capital reductions** stay in `needs_review`, and `ca_needs_review` fails a
-  backfill whose window holds any (26 in Jun–Aug 2024: 20 rights, 4 demergers, 1 capital reduction, 1 dividend
-  with no amount). Their factor needs a person, or the theoretical ex-rights price from the cum-rights close.
+- **Rights issues, demergers and capital reductions** stay in `needs_review` (26 in Jun–Aug 2024: 20 rights,
+  4 demergers, 1 capital reduction, 1 dividend with no amount). Their factor needs a person, or the theoretical
+  ex-rights price from the cum-rights close. Arush decided (2026-10-22) that past ones do not block: a backfill
+  writes the lake and `pending_corporate_actions` (warning) lists them in its `detail`; `ca_needs_review`
+  (critical) fails only for ex-dates in the next three sessions, and also tonight's on a nightly run.
 - **No holiday list before 2011.** The API returns `{}` for those years, so the pre-2011 calendar must come
   from the archive itself (a weekday 404 next to published days is a holiday).
 - **Unannounced splits** are not caught by `prev_close_continuity`, because NSE's previous close is
