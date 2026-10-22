@@ -63,16 +63,20 @@ def _venue(conn: psycopg.Connection[Any]) -> tuple[int, int]:
 def calendar_sync(conn: psycopg.Connection[Any], f: Fetchers, start: date, end: date) -> int:
     feed = db.feed(conn, "xnse_holidays")
     with db.run_log(conn, "calendar-sync", start=start, end=end) as run:
-        url, key = nse_api.holidays_url()
-        fetched, payload = nse_api.fetch_json(f.api, url, key)
-        hol = nse_api.parse_holidays(payload)
         with conn.transaction():
             eod_ingest.start_ingest_run(conn, run.run_id, feed["feed_id"], "full_refresh", start, end)
-            eod_ingest.record_file(conn, feed["feed_id"], None, fetched, run.run_id)
-            calendar.record_holidays(conn, VENUE, hol, "nse_holiday_api")
+        per_year: dict[int, int] = {}
+        for year in range(max(start.year, nse_api.FIRST_HOLIDAY_YEAR), end.year + 1):
+            url, key = nse_api.holidays_url(year)
+            fetched, payload = nse_api.fetch_json(f.api, url, key)
+            hol = nse_api.parse_holidays(payload)
+            with conn.transaction():
+                eod_ingest.record_file(conn, feed["feed_id"], None, fetched, run.run_id)
+                calendar.record_holidays(conn, VENUE, hol, "nse_holiday_api")
+            per_year[year] = len(hol)
         n = calendar.rebuild(conn, VENUE, start, end)
         run.add_rows(n)
-        run.metadata.update(holidays=len(hol), sessions=n)
+        run.metadata.update(holidays=per_year, sessions=n)
     return n
 
 
@@ -110,8 +114,14 @@ def calendar_verify(
 
 
 def reference_sync(
-    conn: psycopg.Connection[Any], f: Fetchers, as_of: date, symbol_lookback_days: int = 7
+    conn: psycopg.Connection[Any],
+    f: Fetchers,
+    as_of: date,
+    symbol_lookback_days: int = 7,
+    *,
+    create: bool = True,
 ) -> dict[str, Any]:
+    """Today's listing masters and symbol changes. `as_of` is the day the files were downloaded."""
     venue_id, _ = _venue(conn)
     master_feed = db.feed(conn, "xnse_listing_master")
     sym_feed = db.feed(conn, "xnse_symbol_change")
@@ -133,7 +143,7 @@ def reference_sync(
                     continue
                 master = nse_archives.parse_listing_master(fetched.content)
                 r = listings.sync_master(
-                    conn, ix, master, as_of, venue_code=VENUE, feed_id=master_feed["feed_id"]
+                    conn, ix, master, as_of, venue_code=VENUE, feed_id=master_feed["feed_id"], create=create
                 )
                 out[key] = {"rows": len(master), "new": r.new_listings, "tickers": r.ticker_changes,
                             "review": r.queued_for_review}  # fmt: skip
@@ -163,16 +173,27 @@ def corporate_actions_sync(
     venue_id, _ = _venue(conn)
     feed = db.feed(conn, "xnse_corporate_actions")
     with db.run_log(conn, "corporate-actions", start=start, end=end) as run:
-        url, key = nse_api.corporate_actions_url(start, end)
-        fetched, payload = nse_api.fetch_json(f.api, url, key)
-        actions = nse_api.parse_corporate_actions(payload)
+        out: dict[str, Any] = {"announced": 0, "inserted": 0, "needs_review": 0, "unknown": []}
         with conn.transaction():
             eod_ingest.start_ingest_run(conn, run.run_id, feed["feed_id"], "incremental", start, end)
-            eod_ingest.record_file(conn, feed["feed_id"], None, fetched, run.run_id)
-            res = corporate_actions.load(conn, venue_id, actions)
-        run.add_rows(res.inserted)
-        out = {"announced": len(actions), "inserted": res.inserted, "needs_review": res.needs_review,
-               "unknown": res.unknown_isin[:50]}  # fmt: skip
+        for index in nse_api.ACTION_INDEXES:
+            url, key = nse_api.corporate_actions_url(start, end, index)
+            try:
+                fetched, payload = nse_api.fetch_json(f.api, url, key)
+            except FileNotFoundError:
+                if index == "equities":
+                    raise
+                continue  # an older replay folder without the SME list
+            actions = nse_api.parse_corporate_actions(payload)
+            with conn.transaction():
+                eod_ingest.record_file(conn, feed["feed_id"], None, fetched, run.run_id)
+                res = corporate_actions.load(conn, venue_id, actions)
+            run.add_rows(res.inserted)
+            out["announced"] += len(actions)
+            out["inserted"] += res.inserted
+            out["needs_review"] += res.needs_review
+            out["unknown"] += res.unknown_isin
+        out["unknown"] = out["unknown"][:50]
         run.metadata.update(out)
     return out
 
@@ -299,23 +320,33 @@ def backfill(
     *,
     action_window_days: int = 90,
     lake_root: Path | None = None,
+    master_as_of: date | None = None,
 ) -> EodResult:
     """Load history into an empty database, in the order that keeps every change date-forward:
 
     1. calendar (holidays, then special sessions proven by the archive)
     2. raw bars oldest first, creating listings and tickers as they appear
-    3. today's listing master (real listing dates, names, listings that never traded)
-    4. corporate actions over the whole window, in chunks
-    5. clean bars, checks on the last session, lake export
+    3. corporate actions over the whole window, in chunks
+    4. new ISINs that those splits explain become identifier changes, and the files from the first
+       of them are read again so the post-split rows land on the right listing
+    5. the listing master as downloaded today (`master_as_of`): names, listing dates and symbol
+       changes since `start`; new listings and tickers from it only when the window reaches today
+    6. clean bars, checks on the last session, lake export
     """
+    as_of = master_as_of or date.today()
     calendar_sync(conn, f, start, date(end.year + 1, 12, 31))
     calendar_verify(conn, f, start, end)
     res = ingest(conn, f, start, end)
-    reference_sync(conn, f, end)
+    venue_id, _ = _venue(conn)
     lo = start
     while lo <= end:
         hi = min(lo + timedelta(days=action_window_days - 1), end)
         with contextlib.suppress(FileNotFoundError):
             corporate_actions_sync(conn, f, lo, hi)
         lo = hi + timedelta(days=1)
+    with conn.transaction():
+        resolved = listings.resolve_isin_changes(conn, listings.ListingIndex.load(conn, venue_id))
+    if resolved:
+        ingest(conn, f, min(d for _, d in resolved), end)
+    reference_sync(conn, f, as_of, symbol_lookback_days=(as_of - start).days, create=(as_of - end).days <= 7)
     return build(conn, start, end, lake_root=lake_root, result=res)

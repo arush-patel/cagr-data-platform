@@ -10,7 +10,7 @@ slice implements, where the code differs from the blueprint and why, and what co
 |---|---|---|
 | D1 | NSE bhavcopy is the primary daily price source | Built. UDiFF from 8 Jul 2024, the legacy format before that. Each file gets a receipt (URL, sha256, size, local path) before its rows are written. |
 | D2 | Yahoo as a secondary cross-check | Not built (decision still open). |
-| D3 | Corporate actions from the NSE API, parsed, with a review queue | Built. Bonus, split, consolidation and dividends parse to a price factor; rights, demergers and arrangements go to `needs_review`. Unparsed text with an ex-date within 3 sessions fails the run (`ca_needs_review`, critical). Nightly fetches today−7 … today+30. |
+| D3 | Corporate actions from the NSE API, parsed, with a review queue | Built. Bonus, split, consolidation, buybacks and dividends parse to a price factor; rights, demergers and arrangements go to `needs_review`. Unparsed text with an ex-date within 3 sessions fails the run (`ca_needs_review`, critical). Nightly fetches today−7 … today+30. |
 | D4 | Listing masters, symbol changes and an ISIN check on every bhavcopy | Built. All changes go through `ref.listing_change`; only exact-ISIN cases auto-apply. |
 | D5 | Market cap from shares outstanding | Not built. Tables exist (`ref.shares_outstanding`, `ref.market_cap_daily`). |
 | D6 | Index data from ind_close_all | Not built. |
@@ -34,7 +34,8 @@ Each of these is a migration in `migrations/`, so the difference is visible in o
    local path, ingest run). `raw.vendor_file_missing` records a 404 on a day we expected a file. Together
    they answer "which file did this number come from" and "did NSE publish anything that day".
 3. **More bhavcopy columns on `raw.vendor_bar`** (`0003`): `prev_close`, `trade_count`, `series`. The
-   previous close is the evidence that confirms a corporate action and detects an unannounced one.
+   previous close turned out to be unadjusted on ex-dates, so it checks continuity (a wrong mapping or a missed
+   file), not corporate actions.
 4. **Calendar exceptions** (`0009`). `ref.calendar_exception` holds the facts the sessions are built from:
    holidays from the NSE list and special sessions proven by a bhavcopy on a non-weekday. `ref.calendar` gains
    its regular hours and weekend days. Sessions are rebuilt from these facts, never edited by hand.
@@ -46,7 +47,9 @@ Each of these is a migration in `migrations/`, so the difference is visible in o
 7. **Three data-quality checks added** (`0009`): `raw_row_count` (a session's listing count against the median of the
    previous 20 sessions, within 10% or 5 listings), `prev_close_continuity` (a jump between our close and NSE's previous close with
    no confirmed or applied action; critical), `return_outlier` (a daily move over 25%; warning).
-8. **Left out for now**: the `llm` schema, the legacy feature tables and compatibility views, `aif_base`, and
+8. **Buybacks are a kind** (`0010`). The blueprint's factor check names `buyback` but its kind list left it
+   out, so every "Buy Back" went to review. A buyback is recorded at factor 1.
+9. **Left out for now**: the `llm` schema, the legacy feature tables and compatibility views, `aif_base`, and
    the strategy, observatory, models, futures and costs tables. They belong to later slices and nothing in
    this one reads them.
 
@@ -58,13 +61,36 @@ Each of these is a migration in `migrations/`, so the difference is visible in o
 - **The coverage check's cohort** is "listings that traded in the previous 5 sessions", a stand-in until the
   universe tables are filled.
 - **Index feed, market cap, universe membership** are not loaded yet (D5, D6).
-- **NSE was not reachable from the build environment**, so every test runs on synthetic files that follow the
-  real formats. The first run against the real archive should be a short backfill (a few weeks of 2024 on
-  both sides of the 8 Jul format change) before any long one.
+- **Rights issues, demergers and capital reductions** stay in `needs_review`, and `ca_needs_review` fails a
+  backfill whose window holds any (26 in Jun–Aug 2024: 20 rights, 4 demergers, 1 capital reduction, 1 dividend
+  with no amount). Their factor needs a person, or the theoretical ex-rights price from the cum-rights close.
+- **No holiday list before 2011.** The API returns `{}` for those years, so the pre-2011 calendar must come
+  from the archive itself (a weekday 404 next to published days is a holiday).
+- **Unannounced splits** are not caught by `prev_close_continuity`, because NSE's previous close is
+  unadjusted; they show up as `return_outlier` (warning). Detecting them from the outlier is still to build.
+
+## What the first real backfill found (Jun–Aug 2024)
+
+The synthetic files had encoded guesses that the real archive contradicted. Each fix has a test on a
+trimmed real file in `tests/data/nse_2024`.
+
+| Found | Fix |
+|---|---|
+| The holiday API without `year=` returns only the current year, so 2024's holidays were sessions | One call per year from 2011; past years cached once |
+| NSE's previous close on an ex-date is the unadjusted close (both formats) | An action is confirmed by the ex-date open or close moving by its factor |
+| A split and a bonus can share an ex-date (VERTOZ, AARTECH) | Actions on one ex-date are confirmed on the product of their factors |
+| A face-value split brings a new ISIN on the same ticker (16 in the window) | Same issuer code + a parsed split in the 10 days before → `identifier_change` on the listing; the backfill re-reads the files from that day |
+| SME corporate actions are a separate list (`index=sme`), with a scrip code in the `isin` field | Both lists are fetched; a non-ISIN falls back to the symbol |
+| Rights entitlements (`*-RE`) trade in BE/ST and became listings | ISIN security code 20 is dropped |
+| The backfill applied today's EQUITY_L as if dated the window's end | The master is dated the day it was downloaded and only fills names and dates for a past window |
+| Coverage counted stocks that trade on some days only (BE, BZ, SME) and sat at 97% | The cohort is listings that traded in each of the previous five sessions (99.5–99.8%) |
+| A fresh database planned the clean build without statistics (10+ minutes) | `ANALYZE` after bulk writes: autovacuum never analyzes a partitioned parent |
+
+The 62-session run takes about 90 seconds once the files are cached.
 
 ## Next slices
 
-1. A real backfill from 2011 on a machine that can reach NSE, and the checks' first real numbers.
+1. A real backfill from 2011, now that Jun–Aug 2024 runs clean apart from the review queue.
 2. The pre-2011 ticker history, the index feed and market cap.
 3. The review page for `ref.listing_change` and `needs_review` corporate actions.
 4. The first feature families on the `fb` registry, with parity against today's values.

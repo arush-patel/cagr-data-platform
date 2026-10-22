@@ -1,14 +1,20 @@
 """Corporate actions (D3): load, confirm against the exchange's own previous close, apply.
 
 load     NSE's corporate-actions feed → clean.corporate_action (proposed, or needs_review)
-confirm  a proposed action with a price effect is confirmed when the bhavcopy of its ex-date shows
-         NSE adjusted the previous close by the same factor; actions with no price effect confirm at once
-detect   a previous-close break with no action on file becomes a detected action for review
+confirm  a proposed action with a price effect is confirmed when the ex-date price moved by its factor:
+         NSE does not adjust the previous close in the bhavcopy (checked on the real 2024 files, both
+         formats), so the evidence is the ex-date open or close against our last close. Actions with
+         no price effect confirm at once
+detect   a previous-close break with no action on file becomes a detected action for review. Because
+         NSE's previous close is unadjusted, a break means a data problem (a wrong mapping, a missed
+         or revised file), not a split; an unannounced split shows up as a return outlier instead
 apply    clean.apply_corporate_action rescales history once and records the dirty range
 """
 
 from __future__ import annotations
 
+import math
+from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import date
 from typing import Any
@@ -19,6 +25,9 @@ import psycopg
 from cagr_data.reference.ca_parser import parse_subject
 
 TOLERANCE = 0.01
+# On the ex-date the price must sit nearer the factor than 1 (geometric midpoint), and the move left
+# after the factor must fit a normal day: wider than the 20% band, since splits and bonuses trade freely.
+MAX_ADJUSTED_MOVE = 0.30
 
 
 @dataclass
@@ -84,12 +93,12 @@ WITH primary_vendor AS (
     WHERE f.venue_id = %(venue)s AND f.dataset = 'eod_bar' AND f.asset_class = 'equity' AND f.priority = 1
 ),
 latest AS (
-    SELECT DISTINCT ON (b.listing_id, b.session_date) b.listing_id, b.session_date, b.close, b.prev_close
+    SELECT DISTINCT ON (b.listing_id, b.session_date) b.listing_id, b.session_date, b.open, b.close
     FROM raw.vendor_bar b JOIN primary_vendor pv USING (vendor_id)
     WHERE b.listing_id = ANY(%(listings)s)
     ORDER BY b.listing_id, b.session_date, b.revision DESC
 )
-SELECT cur.listing_id, cur.session_date, cur.prev_close AS vendor_prev_close,
+SELECT cur.listing_id, cur.session_date, cur.open, cur.close,
        prev.close AS our_prev_close, prev.session_date AS prev_session
 FROM latest cur
 JOIN LATERAL (
@@ -101,8 +110,16 @@ WHERE (cur.listing_id, cur.session_date) IN (SELECT * FROM unnest(%(listings)s::
 """
 
 
+def move_matches_factor(ex_price: float, prev_close: float, factor: float) -> bool:
+    """Did the price on the ex-date move by `factor` from the previous close, rather than not at all?"""
+    if ex_price <= 0 or prev_close <= 0 or factor <= 0 or factor == 1:
+        return False
+    left = math.log(ex_price / prev_close) - math.log(factor)
+    return abs(left) < abs(math.log(factor)) / 2 and abs(left) <= math.log(1 + MAX_ADJUSTED_MOVE)
+
+
 def confirm(conn: psycopg.Connection[Any], venue_id: int) -> dict[str, int]:
-    """Confirm proposed, parsed actions whose ex-date bhavcopy proves NSE applied the same factor."""
+    """Confirm proposed, parsed actions whose ex-date price moved by their factor."""
     out = {"confirmed": 0, "waiting": 0, "mismatch": 0}
     conn.execute(
         "UPDATE clean.corporate_action ca SET status = 'confirmed' FROM ref.listing l "
@@ -129,20 +146,24 @@ def confirm(conn: psycopg.Connection[Any], venue_id: int) -> dict[str, int]:
             },
         )
     }
+    # A split and a bonus on one ex-date (VERTOZ, AARTECH in 2024) move the price by their product.
+    groups: dict[tuple[int, date], list[dict[str, Any]]] = defaultdict(list)
     for p in pending:
-        e = ev.get((p["listing_id"], p["ex_date"]))
-        if e is None or not e["vendor_prev_close"] or not e["our_prev_close"]:
-            out["waiting"] += 1  # ex-date not traded yet
+        groups[(p["listing_id"], p["ex_date"])].append(p)
+    for key, acts in groups.items():
+        e = ev.get(key)
+        if e is None or not e["our_prev_close"] or not (e["open"] or e["close"]):
+            out["waiting"] += len(acts)  # ex-date not traded yet
             continue
-        implied = e["vendor_prev_close"] / e["our_prev_close"]
-        if abs(implied / p["price_factor"] - 1) <= TOLERANCE:
+        factor = math.prod(a["price_factor"] for a in acts)
+        if any(move_matches_factor(px, e["our_prev_close"], factor) for px in (e["open"], e["close"]) if px):
             conn.execute(
-                "UPDATE clean.corporate_action SET status = 'confirmed' WHERE action_id = %s",
-                (p["action_id"],),
+                "UPDATE clean.corporate_action SET status = 'confirmed' WHERE action_id = ANY(%s)",
+                ([a["action_id"] for a in acts],),
             )
-            out["confirmed"] += 1
+            out["confirmed"] += len(acts)
         else:
-            out["mismatch"] += 1
+            out["mismatch"] += len(acts)
     return out
 
 

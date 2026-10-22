@@ -39,7 +39,13 @@ def _listing(conn: Conn, isin: str) -> int:
 
 def _bootstrap(conn: Conn, files: Path, lake: Path) -> pipeline.EodResult:
     return pipeline.backfill(
-        conn, pipeline.Fetchers.offline(files), fx.START, fx.END, action_window_days=60, lake_root=lake
+        conn,
+        pipeline.Fetchers.offline(files),
+        fx.START,
+        fx.END,
+        action_window_days=60,
+        lake_root=lake,
+        master_as_of=fx.END,
     )
 
 
@@ -73,7 +79,7 @@ def test_full_pipeline(fresh_db: Conn, nse_files: Path, tmp_path: Path) -> None:
         fx.sessions()
     )
 
-    # the split: confirmed by NSE's adjusted previous close, applied once, history restated
+    # the split: confirmed by the ex-date price move, applied once, history restated
     abc = _listing(conn, "INE123A01016")
     ca = conn.execute(
         "SELECT * FROM clean.corporate_action WHERE listing_id = %s AND kind = 'split'", (abc,)
