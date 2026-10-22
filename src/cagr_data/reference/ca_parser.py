@@ -19,7 +19,7 @@ from fractions import Fraction
 
 @dataclass(frozen=True)
 class ParsedAction:
-    kind: str  # split | bonus | consolidation | rights | demerger | dividend | other
+    kind: str  # split | bonus | consolidation | rights | demerger | dividend | buyback | other
     parse_status: str  # parsed | needs_review
     ratio_new: Decimal | None = None
     ratio_old: Decimal | None = None
@@ -33,6 +33,7 @@ class ParsedAction:
 
 
 _MONEY = r"(?:rs\.?|re\.?|inr|₹)\s*([0-9]+(?:\.[0-9]+)?)"
+_MONEY_AFTER = r"([0-9]+(?:\.[0-9]+)?)\s*(?:rs|re|inr)\b\.?\s*per"
 _RATIO = r"([0-9]+(?:\.[0-9]+)?)\s*:\s*([0-9]+(?:\.[0-9]+)?)"
 
 # Text with no effect on price or share count.
@@ -88,11 +89,16 @@ def _parse_part(text: str) -> ParsedAction | None:
         # Needs the issue price and the cum-rights close for the theoretical ex-rights price.
         return ParsedAction("rights", "needs_review")
 
+    if re.search(r"buy ?-?back", low):
+        # A tender or open-market buyback changes the share count, not the price basis.
+        return ParsedAction("buyback", "parsed")
+
     if re.search(r"demerger|spin ?off", low):
         return ParsedAction("other", "needs_review")
 
     if re.search(r"dividend|distribution", low) and not _IGNORE.search(low):
-        amounts = re.findall(_MONEY, low)
+        # 'Rs 5 Per Share', and the amount-first 'Dividend - 1 Rs Per Share' NSE also publishes
+        amounts = re.findall(_MONEY, low) or re.findall(_MONEY_AFTER, low)
         if not amounts:
             # 'Dividend - 50%' is a percentage of face value; resolve it by hand.
             return ParsedAction("dividend", "needs_review")

@@ -5,7 +5,8 @@ Used by the tests and by `cagr demo`, so the whole pipeline runs without reachin
 The story the files tell (Sep–Oct 2026):
   * XNSE trades weekdays; 2 Oct and 20 Oct are holidays; Saturday 10 Oct is a special session.
   * RELIANCE, TCS, INFY trade every session. ABCIND splits 1:5 (Rs 10 → Rs 2) with ex-date 15 Oct,
-    announced through the corporate-actions API; NSE's previous close on the ex-date is adjusted.
+    announced through the corporate-actions API. As in the real files, NSE's previous close on the
+    ex-date is the unadjusted close.
   * XYZOLD is renamed XYZNEW on 14 Oct (same ISIN, listed in symbolchange.csv).
   * NEWCO first appears on 21 Oct and is in no master file.
   * A government bond row (series GS) is in every file and must be ignored.
@@ -20,6 +21,8 @@ import zipfile
 from dataclasses import dataclass
 from datetime import date, timedelta
 from pathlib import Path
+
+from cagr_data.vendors import nse_api
 
 UDIFF_COLUMNS = [
     "TradDt", "BizDt", "Sgmt", "Src", "FinInstrmTp", "FinInstrmId", "ISIN", "TckrSymb", "SctySrs", "XpryDt",
@@ -82,8 +85,6 @@ def bhavcopy_rows(
         symbol = "XYZNEW" if s.symbol == "XYZOLD" and d >= RENAME_ON else s.symbol
         close = (overrides or {}).get(s.symbol, raw_close(s, i, d))
         p = prev.get(s.isin, close)
-        if s.symbol == "ABCIND" and d == SPLIT_EX:
-            p = round(p / 5, 2)  # NSE adjusts the previous close on the ex-date
         o, h, lo = round(close * 0.995, 2), round(close * 1.01, 2), round(close * 0.985, 2)
         vol = 100_000 + 1_000 * i
         if s.symbol == "ABCIND" and d >= SPLIT_EX:
@@ -184,19 +185,26 @@ def write_all(root: Path, *, master_as_of: date = END) -> None:
         "XYZ Limited,XYZOLD,XYZNEW,14-OCT-2026\nOld Co,OLDCO,NEWCO2,01-JAN-2015\n"
     )
 
-    api = root / "nse_api"
-    (api / "holiday-master").mkdir(parents=True, exist_ok=True)
-    (api / "holiday-master" / f"trading-{date.today():%Y%m%d}.json").write_text(
-        json.dumps(
-            {
-                "CM": [
-                    {"tradingDate": f"{d:%d-%b-%Y}", "weekDay": f"{d:%A}", "description": n, "Sr_no": k + 1}
-                    for k, (d, n) in enumerate(sorted(HOLIDAYS.items()))
-                ],
-                "FO": [],
-            }  # fmt: skip
+    for year in range(START.year, END.year + 2):  # the backfill asks for the year after too
+        hol = sorted((d, n) for d, n in HOLIDAYS.items() if d.year == year)
+        p = root / "nse_api" / nse_api.holidays_url(year)[1]
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(
+            json.dumps(
+                {
+                    "CM": [
+                        {
+                            "tradingDate": f"{d:%d-%b-%Y}",
+                            "weekDay": f"{d:%A}",
+                            "description": n,
+                            "Sr_no": k + 1,
+                        }
+                        for k, (d, n) in enumerate(hol)
+                    ],
+                    "FO": [],
+                }  # fmt: skip
+            )
         )
-    )
     write_corporate_actions(root, START, END)
 
 

@@ -2,8 +2,11 @@
 
 Every change goes through ref.listing_change and is applied by ref.apply_listing_change, so the
 queue is the audit trail. Exact-ISIN cases auto-apply: a new ISIN whose ticker is free, and a new
-ticker for a known ISIN. Anything that needs judgement (an unknown ISIN on a ticker another
-listing holds, usually a new ISIN after a face-value split) waits for a person.
+ticker for a known ISIN. A new ISIN on a ticker another listing holds is usually the new ISIN NSE
+issues on a face-value split (KSB, PGEL, ELECON in July 2024). It auto-applies as an identifier
+change only on evidence: the holder's ISIN is gone from that file, both ISINs share the issuer code,
+and a parsed split or consolidation for the holder has its ex-date in the days before. Anything
+else waits for a person.
 
 All changes are date-forward: process sessions oldest first, as the nightly run and the history
 load both do.
@@ -64,10 +67,15 @@ class ListingIndex:
         return None if row is None else int(row["listing_id"])
 
 
+# NSE's new ISIN can first trade a few sessions after the split's ex-date (KAMOPAINTS: 14 → 18 Jun 2024).
+SPLIT_ISIN_WINDOW_DAYS = 10
+
+
 @dataclass
 class SyncResult:
     new_listings: int = 0
     ticker_changes: int = 0
+    isin_changes: int = 0
     queued_for_review: int = 0
     details: list[dict[str, Any]] = field(default_factory=list)
 
@@ -97,6 +105,62 @@ def _queue(
     if auto:
         conn.execute("SELECT ref.apply_listing_change(%s)", (change_id,))
     return change_id
+
+
+def same_issuer(a: str, b: str) -> bool:
+    """Indian ISINs: IN + issuer type and code (5) + security type (2) + serial (2) + check digit."""
+    return len(a) == len(b) == 12 and a[:9] == b[:9]
+
+
+def split_explains(conn: psycopg.Connection[Any], listing_id: int, d: date) -> int | None:
+    """The action_id of a parsed split or consolidation of `listing_id` with ex-date shortly before `d`."""
+    row = conn.execute(
+        "SELECT action_id FROM clean.corporate_action WHERE listing_id = %s "
+        "AND kind IN ('split','consolidation') AND parse_status IN ('parsed','manual') AND status <> 'rejected' "
+        "AND ex_date <= %s AND ex_date > %s::date - %s ORDER BY ex_date DESC LIMIT 1",
+        (listing_id, d, d, SPLIT_ISIN_WINDOW_DAYS),
+    ).fetchone()
+    return None if row is None else int(row["action_id"])
+
+
+def _isin_change(
+    conn: psycopg.Connection[Any], ix: ListingIndex, listing_id: int, isin: str, d: date,
+    feed_id: int | None, action_id: int,
+) -> int:  # fmt: skip
+    change_id = _queue(conn, "identifier_change", listing_id, d, {"id_type": "isin", "value": isin}, feed_id,
+                       True, note=f"new ISIN after corporate_action {action_id}")  # fmt: skip
+    ix.by_isin[isin] = listing_id
+    ix.pending_isins.discard(isin)
+    return change_id
+
+
+def resolve_isin_changes(conn: psycopg.Connection[Any], ix: ListingIndex) -> list[tuple[int, date]]:
+    """Queued new ISINs that a split loaded since explains become identifier changes on the holder.
+
+    A backfill sees the files before it loads corporate actions, so it queues every post-split ISIN
+    first and resolves them here. Returns (listing, date) for each, so the caller can re-read the
+    files from that date: those rows were left unmapped the first time.
+    """
+    out: list[tuple[int, date]] = []
+    for c in conn.execute(
+        "SELECT change_id, effective_date, payload, source_feed_id FROM ref.listing_change "
+        "WHERE kind = 'new_listing' AND status = 'proposed' AND (payload ->> 'holder_isin_absent')::boolean "
+        "ORDER BY effective_date, change_id"
+    ).fetchall():
+        p, d = c["payload"], c["effective_date"]
+        holder = int(p["ticker_held_by_listing"])
+        holder_isins = [k for k, v in ix.by_isin.items() if v == holder]
+        action = split_explains(conn, holder, d)
+        if action is None or not any(same_issuer(p["isin"], h) for h in holder_isins):
+            continue
+        new_id = _isin_change(conn, ix, holder, p["isin"], d, c["source_feed_id"], action)
+        conn.execute(
+            "UPDATE ref.listing_change SET status = 'rejected', decided_by = 'pipeline', decided_at = now(), "
+            "note = %s WHERE change_id = %s",
+            (f"superseded by identifier_change {new_id}", c["change_id"]),
+        )
+        out.append((holder, d))
+    return out
 
 
 def observe(
@@ -174,12 +238,19 @@ def observe(
             res.new_listings += 1
         else:
             holder_isins = {k for k, v in ix.by_isin.items() if v == holder}
+            absent = not holder_isins & isins_today
+            action = split_explains(conn, holder, session) if absent else None
+            if action is not None and any(same_issuer(isin, h) for h in holder_isins):
+                _isin_change(conn, ix, holder, isin, session, feed_id, action)
+                res.isin_changes += 1
+                continue
             reason = (
                 "ticker held by a listing whose ISIN is absent today: likely a new ISIN for the same company"
-                if not holder_isins & isins_today
+                if absent
                 else "ticker held by another listing that also trades today"
             )
             payload["ticker_held_by_listing"] = holder
+            payload["holder_isin_absent"] = absent
             _queue(conn, "new_listing", None, session, payload, feed_id, False, note=reason)
             ix.pending_isins.add(isin)
             res.queued_for_review += 1
@@ -197,17 +268,24 @@ def sync_master(
     *,
     venue_code: str,
     feed_id: int,
+    create: bool = True,
 ) -> SyncResult:
-    """EQUITY_L / SME_EQUITY_L: new ISINs become listings from their listing date; names and dates fill in."""
-    res = observe(
-        conn,
-        ix,
-        master[["isin", "symbol", "name"]],
-        as_of,
-        venue_code=venue_code,
-        feed_id=feed_id,
-        listed_on={r.isin: r.listed_on for r in master.itertuples(index=False) if pd.notna(r.listed_on)},
-    )
+    """EQUITY_L / SME_EQUITY_L: new ISINs become listings from their listing date; names and dates fill in.
+
+    The master is a snapshot of the day it is downloaded. With `create` off (a backfill that ends
+    in the past) it only fills names and listing dates: today's tickers and ISINs did not hold then.
+    """
+    res = SyncResult()
+    if create:
+        res = observe(
+            conn,
+            ix,
+            master[["isin", "symbol", "name"]],
+            as_of,
+            venue_code=venue_code,
+            feed_id=feed_id,
+            listed_on={r.isin: r.listed_on for r in master.itertuples(index=False) if pd.notna(r.listed_on)},
+        )
     # The master knows the real listing date and name; fill them where we only had first-seen values.
     for r in master.itertuples(index=False):
         lid = ix.by_isin.get(r.isin)

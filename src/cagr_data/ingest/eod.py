@@ -16,6 +16,7 @@ from typing import Any
 import pandas as pd
 import psycopg
 
+from cagr_data.clean import bars
 from cagr_data.core import db
 from cagr_data.reference import listings
 from cagr_data.settings import get_settings
@@ -236,11 +237,15 @@ def ingest_bhavcopy(
                 run.saw_session(s)
         with conn.transaction():
             finish_ingest_run(conn, run.run_id, sum(r.equity_rows - r.unmapped for r in results))
+            # A partitioned parent is never auto-analyzed; the clean build plans its joins from this.
+            if sum(r.inserted + r.revised for r in results) >= bars.ANALYZE_AFTER_ROWS:
+                conn.execute("ANALYZE raw.vendor_bar")
         run.metadata.update(
             loaded=sum(r.status == "loaded" for r in results),
             missing=[str(r.session_date) for r in results if r.status == "missing"],
             new_listings=sum(r.reference.new_listings for r in results),
             ticker_changes=sum(r.reference.ticker_changes for r in results),
+            isin_changes=sum(r.reference.isin_changes for r in results),
             queued_for_review=sum(r.reference.queued_for_review for r in results),
             revised=sum(r.revised for r in results),
             unmapped=sum(r.unmapped for r in results),

@@ -140,10 +140,18 @@ def parse_bhavcopy(content: bytes, fmt: str, expected_date: date | None = None) 
     return out[BHAV_COLUMNS]
 
 
+def is_rights_entitlement(isin: str) -> bool:
+    return len(isin) == 12 and isin.startswith("INE") and isin[7:9] == "20"
+
+
 def equity_rows(bhav: pd.DataFrame, series_preference: tuple[str, ...]) -> pd.DataFrame:
-    """One row per ISIN: equity series only, the most preferred series when an ISIN has several."""
+    """One row per ISIN: equity series only, the most preferred series when an ISIN has several.
+
+    Rights entitlements (SOBHA-RE, MGEL-RE…) trade for a few days in the BE and ST series. Their ISIN
+    has security code 20 where shares have 01; they are not shares and never become listings.
+    """
     rank = {s: i for i, s in enumerate(series_preference)}
-    eq = bhav[bhav["series"].isin(rank)].copy()
+    eq = bhav[bhav["series"].isin(rank) & ~bhav["isin"].map(is_rights_entitlement)].copy()
     eq["_rank"] = eq["series"].map(rank)
     key = eq["isin"].where(eq["isin"] != "", "SYM:" + eq["symbol"])
     eq = eq.assign(_key=key).sort_values(["_key", "_rank"]).drop_duplicates("_key", keep="first")

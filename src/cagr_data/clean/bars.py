@@ -156,6 +156,9 @@ def _params(venue_id: int, start: date, end: date, listing_ids: list[int] | None
     return {"venue": venue_id, "start": start, "end": end, "listings": listing_ids}
 
 
+ANALYZE_AFTER_ROWS = 20_000
+
+
 def build_1d(
     conn: psycopg.Connection[Any], venue_id: int, start: date, end: date, listing_ids: list[int] | None = None
 ) -> int:
@@ -168,6 +171,11 @@ def build_1d(
         "ca_day": QA_CORPORATE_ACTION_DAY,
     }
     n = conn.execute(_BUILD_1D, p).rowcount
+    if n >= ANALYZE_AFTER_ROWS:
+        # Autovacuum never analyzes a partitioned parent, and rows written in this transaction have no
+        # statistics yet: without this the flag update below planned a nested loop on the first real
+        # backfill (160k bars) and ran for over ten minutes instead of seconds.
+        conn.execute("ANALYZE clean.bar_1d")
     # Sessions before the range are only read, never written.
     lookback = conn.execute(
         "SELECT coalesce(min(session_date), %(start)s) AS d FROM (SELECT cs.session_date FROM ref.calendar_session cs "

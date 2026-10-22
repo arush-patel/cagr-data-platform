@@ -128,15 +128,18 @@ def check_calendar_last_session(c: Ctx) -> CheckResult:
 
 
 def check_coverage(c: Ctx) -> CheckResult:
-    # Until universes are built from market cap, the cohort is every listing that traded in the five
-    # sessions before this one: a stock that traded then and not today is the gap this check catches.
+    # Until universes are built from market cap, the cohort is every listing that traded in each of the
+    # five sessions before this one: a stock that traded all week and not today is the gap this check
+    # catches. "Any of the five" counted BE, BZ and SME stocks that trade on some days only, and sat
+    # at 97-98% on every real session in Jun-Aug 2024; "each of the five" sits at 99.5-99.8%.
     row = c.conn.execute(
         """
         WITH prev AS (SELECT session_date FROM ref.calendar_session WHERE calendar_id = %(cal)s
                       AND session_date < %(session)s ORDER BY session_date DESC LIMIT 5),
-        cohort AS (SELECT DISTINCT b.listing_id FROM clean.bar_1d b JOIN ref.listing l USING (listing_id)
+        cohort AS (SELECT b.listing_id FROM clean.bar_1d b JOIN ref.listing l USING (listing_id)
                    WHERE l.venue_id = %(venue)s AND b.is_traded AND b.bar_date IN (SELECT session_date FROM prev)
-                     AND (l.delisted_on IS NULL OR l.delisted_on > %(session)s))
+                     AND (l.delisted_on IS NULL OR l.delisted_on > %(session)s)
+                   GROUP BY b.listing_id HAVING count(*) = (SELECT count(*) FROM prev))
         SELECT count(*) AS cohort,
                count(*) FILTER (WHERE EXISTS (SELECT 1 FROM clean.bar_1d b WHERE b.listing_id = cohort.listing_id
                                               AND b.bar_date = %(session)s AND b.is_traded)) AS covered

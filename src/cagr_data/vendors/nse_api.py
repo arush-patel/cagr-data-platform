@@ -6,6 +6,7 @@ Calls are few (one or two a day), run on a cookie session, and back off on 403 (
 from __future__ import annotations
 
 import json
+import re
 from datetime import date, datetime
 
 import pandas as pd
@@ -16,15 +17,36 @@ API = "https://www.nseindia.com/api"
 HOME = "https://www.nseindia.com/"
 
 
-def holidays_url() -> tuple[str, str]:
-    return f"{API}/holiday-master?type=trading", f"holiday-master/trading-{date.today():%Y%m%d}.json"
+# The list starts in 2011; earlier years come back empty and need the archive as evidence instead.
+FIRST_HOLIDAY_YEAR = 2011
 
 
-def corporate_actions_url(start: date, end: date) -> tuple[str, str]:
-    url = (
-        f"{API}/corporates-corporateActions?index=equities&from_date={start:%d-%m-%Y}&to_date={end:%d-%m-%Y}"
+def holidays_url(year: int, today: date | None = None) -> tuple[str, str]:
+    """Without `year` the API returns only the current year, so a backfill asks for each year.
+
+    A past year's list no longer changes and is cached once; the current and later years are fetched
+    again each day, because NSE adds holidays (elections, special closures) during the year.
+    """
+    today = today or date.today()
+    key = (
+        f"holiday-master/trading-{year}.json"
+        if year < today.year
+        else (f"holiday-master/trading-{year}-{today:%Y%m%d}.json")
     )
-    return url, f"corporate-actions/{start:%Y%m%d}-{end:%Y%m%d}.json"
+    return f"{API}/holiday-master?type=trading&year={year}", key
+
+
+# The main board and SME Emerge are separate lists; `equities` alone misses every SME split.
+ACTION_INDEXES = ("equities", "sme")
+
+
+def corporate_actions_url(start: date, end: date, index: str = "equities") -> tuple[str, str]:
+    url = f"{API}/corporates-corporateActions?index={index}&from_date={start:%d-%m-%Y}&to_date={end:%d-%m-%Y}"
+    prefix = "" if index == "equities" else f"{index}-"
+    return url, f"corporate-actions/{prefix}{start:%Y%m%d}-{end:%Y%m%d}.json"
+
+
+_ISIN = re.compile(r"IN[A-Z0-9]{9}[0-9]")
 
 
 def fetch_json(fetcher: Fetcher, url: str, key: str) -> tuple[Fetched, object]:
@@ -36,14 +58,17 @@ def fetch_json(fetcher: Fetcher, url: str, key: str) -> tuple[Fetched, object]:
 
 def parse_holidays(payload: object, segment: str = "CM") -> pd.DataFrame:
     """Trading holidays of one segment (CM = cash market): date and description."""
-    if not isinstance(payload, dict) or segment not in payload:
+    if not isinstance(payload, dict):
+        raise ValueError("holiday payload is not an object")
+    if segment not in payload and payload:
         raise ValueError(f"holiday payload has no {segment} segment")
-    rows = payload[segment]
+    rows = payload.get(segment) or []
     out = pd.DataFrame(
         {
             "holiday_date": [pd.to_datetime(r["tradingDate"], format="%d-%b-%Y").date() for r in rows],
             "description": [str(r.get("description", "")).strip() for r in rows],
-        }
+        },
+        columns=["holiday_date", "description"],
     )
     return out.drop_duplicates("holiday_date").sort_values("holiday_date").reset_index(drop=True)
 
@@ -64,7 +89,8 @@ def parse_corporate_actions(payload: object) -> pd.DataFrame:
             {
                 "symbol": str(r.get("symbol", "")).strip(),
                 "series": str(r.get("series", "")).strip(),
-                "isin": str(r.get("isin", "") or "").strip(),
+                # the SME list puts a numeric scrip code here, not an ISIN: fall back to the symbol
+                "isin": isin if _ISIN.fullmatch(isin := str(r.get("isin", "") or "").strip()) else "",
                 "subject": " ".join(str(r.get("subject", "")).split()),
                 "ex_date": d(r.get("exDate")),
                 "record_date": d(r.get("recDate")),

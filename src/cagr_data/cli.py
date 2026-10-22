@@ -106,10 +106,18 @@ def build(
 
 
 @app.command("backfill")
-def backfill(start: DateOpt, end: DateOpt, offline: OfflineOpt = None) -> None:
+def backfill(
+    start: DateOpt,
+    end: DateOpt,
+    offline: OfflineOpt = None,
+    master_as_of: Annotated[
+        str | None, typer.Option(help="Day the listing masters were downloaded (replays; default today)")
+    ] = None,
+) -> None:
     """Load history into an empty database: calendar, raw, listings, corporate actions, then clean bars."""
     with db.connect() as conn:
-        _print(pipeline.backfill(conn, _fetchers(offline), _d(start), _d(end)).__dict__)
+        _print(pipeline.backfill(conn, _fetchers(offline), _d(start), _d(end),
+                                 master_as_of=_d(master_as_of) if master_as_of else None).__dict__)  # fmt: skip
 
 
 @app.command("demo")
@@ -121,7 +129,8 @@ def demo(
 
     sample.write_all(folder)
     with db.connect() as conn:
-        _print(pipeline.backfill(conn, pipeline.Fetchers.offline(folder), sample.START, sample.END).__dict__)
+        _print(pipeline.backfill(conn, pipeline.Fetchers.offline(folder), sample.START, sample.END,
+                                 master_as_of=sample.END).__dict__)  # fmt: skip
 
 
 @app.command("nightly")

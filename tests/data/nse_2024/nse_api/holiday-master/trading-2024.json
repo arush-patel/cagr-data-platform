@@ -1,0 +1,158 @@
+{
+ "CM": [
+  {
+   "tradingDate": "22-Jan-2024",
+   "weekDay": "Monday",
+   "description": "Special Holiday",
+   "morning_session": null,
+   "evening_session": null
+  },
+  {
+   "tradingDate": "26-Jan-2024",
+   "weekDay": "Friday",
+   "description": "Republic Day",
+   "morning_session": null,
+   "evening_session": null
+  },
+  {
+   "tradingDate": "02-Mar-2024",
+   "weekDay": "Saturday",
+   "description": "Special Live Trading",
+   "morning_session": null,
+   "evening_session": null
+  },
+  {
+   "tradingDate": "08-Mar-2024",
+   "weekDay": "Friday",
+   "description": "Mahashivratri",
+   "morning_session": null,
+   "evening_session": null
+  },
+  {
+   "tradingDate": "25-Mar-2024",
+   "weekDay": "Monday",
+   "description": "Holi",
+   "morning_session": null,
+   "evening_session": null
+  },
+  {
+   "tradingDate": "29-Mar-2024",
+   "weekDay": "Friday",
+   "description": "Good Friday",
+   "morning_session": null,
+   "evening_session": null
+  },
+  {
+   "tradingDate": "11-Apr-2024",
+   "weekDay": "Thursday",
+   "description": "Id-Ul-Fitr (Ramadan Eid)",
+   "morning_session": null,
+   "evening_session": null
+  },
+  {
+   "tradingDate": "14-Apr-2024",
+   "weekDay": "Sunday",
+   "description": "Dr. Baba Saheb Ambedkar Jayanti",
+   "morning_session": null,
+   "evening_session": null
+  },
+  {
+   "tradingDate": "17-Apr-2024",
+   "weekDay": "Wednesday",
+   "description": "Shri Ram Navmi",
+   "morning_session": null,
+   "evening_session": null
+  },
+  {
+   "tradingDate": "21-Apr-2024",
+   "weekDay": "Sunday",
+   "description": "Shri Mahavir Jayanti",
+   "morning_session": null,
+   "evening_session": null
+  },
+  {
+   "tradingDate": "01-May-2024",
+   "weekDay": "Wednesday",
+   "description": "Maharashtra Day",
+   "morning_session": null,
+   "evening_session": null
+  },
+  {
+   "tradingDate": "20-May-2024",
+   "weekDay": "Monday",
+   "description": "General Parliamentary Elections",
+   "morning_session": null,
+   "evening_session": null
+  },
+  {
+   "tradingDate": "17-Jun-2024",
+   "weekDay": "Monday",
+   "description": "Bakri Id",
+   "morning_session": null,
+   "evening_session": null
+  },
+  {
+   "tradingDate": "17-Jul-2024",
+   "weekDay": "Wednesday",
+   "description": "Moharram",
+   "morning_session": null,
+   "evening_session": null
+  },
+  {
+   "tradingDate": "15-Aug-2024",
+   "weekDay": "Thursday",
+   "description": "Independence Day",
+   "morning_session": null,
+   "evening_session": null
+  },
+  {
+   "tradingDate": "07-Sep-2024",
+   "weekDay": "Saturday",
+   "description": "Ganesh Chaturthi",
+   "morning_session": null,
+   "evening_session": null
+  },
+  {
+   "tradingDate": "02-Oct-2024",
+   "weekDay": "Wednesday",
+   "description": "Mahatma Gandhi Jayanti",
+   "morning_session": null,
+   "evening_session": null
+  },
+  {
+   "tradingDate": "12-Oct-2024",
+   "weekDay": "Saturday",
+   "description": "Dussehra",
+   "morning_session": null,
+   "evening_session": null
+  },
+  {
+   "tradingDate": "02-Nov-2024",
+   "weekDay": "Saturday",
+   "description": "Balipratipada",
+   "morning_session": null,
+   "evening_session": null
+  },
+  {
+   "tradingDate": "15-Nov-2024",
+   "weekDay": "Friday",
+   "description": "Prakash Gurpurb Sri Guru Nanak Dev",
+   "morning_session": null,
+   "evening_session": null
+  },
+  {
+   "tradingDate": "20-Nov-2024",
+   "weekDay": "Wednesday",
+   "description": "Assembly Elections in Maharashtra",
+   "morning_session": null,
+   "evening_session": null
+  },
+  {
+   "tradingDate": "25-Dec-2024",
+   "weekDay": "Wednesday",
+   "description": "Christmas",
+   "morning_session": null,
+   "evening_session": null
+  }
+ ]
+}

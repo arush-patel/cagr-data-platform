@@ -55,8 +55,8 @@ raw + applied actions ─► clean.bar_1d ─► bar_1w, bar_1mo ─► ops.dq_r
    becomes a new listing. A new ISIN whose ticker another listing still holds waits for review, because it is
    usually a new ISIN for the same company and guessing wrong splits a price history in two.
 4. **Corporate actions.** Subjects are parsed into a price factor (bonus, split, consolidation, dividends).
-   Rights, demergers and anything unclear go to `needs_review`. An action is confirmed when the bhavcopy's
-   previous close on the ex-date matches our last close times the factor (within 1%).
+   Rights, demergers and anything unclear go to `needs_review`. An action is confirmed when the ex-date price
+   moved by its factor (NSE's previous close is not adjusted). A split's new ISIN joins the same listing.
 5. **Clean bars.** Built from the latest raw revision of the preferred vendor. `adj_factor` is the product of
    the price factors of applied actions after the bar; prices are multiplied by it, `volume_adj` divided.
    Weekly and monthly bars are resampled from the adjusted daily bars.
