@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  platform:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: cagr
+          POSTGRES_PASSWORD: cagr
+          POSTGRES_DB: cagr_ci
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U cagr"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      CAGR_TEST_DATABASE_URL: postgresql://cagr:cagr@localhost:5432/cagr_ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --locked
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run mypy
+      - run: uv run pytest -ra
