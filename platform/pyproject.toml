@@ -1,0 +1,16 @@
+[project]
+name = "cagr-data"
+version = "0.1.0"
+description = "The Cagr data platform: vendor feeds, reference data, clean bars and checks"
+requires-python = ">=3.12"
+dependencies = [
+    "psycopg[binary]>=3.2",
+    "pydantic-settings>=2.6",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cagr_data"]
