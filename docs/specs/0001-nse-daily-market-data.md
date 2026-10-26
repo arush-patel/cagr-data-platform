@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft for review |
+| Status | Draft for review; open questions decided 26 Oct 2026 |
 | Date | 2026-10-26 |
 | Owner | Arush |
 | Component | `platform` (the data platform), version 0.1.0 |
@@ -243,10 +243,11 @@ move to it, and a `vendor_revision` warning lists what changed. Nothing is delet
 ### 7.5 Backfill
 
 - Same assets, run as a Dagster backfill over a date range.
-- Proposed start: 1 Jan 2011, the first year with ISIN in bhavcopy and with a holiday list. 2010
-  can be added later; its rows need the symbol-change history to map, which is spec 0002 work.
-  (Open question Q1.)
-- About 4,000 sessions at 1 request a second: roughly 1 to 2 hours of downloads, run in chunks of
+- Start: the first session of 2010 (decided, Q1). The 2010 files have no ISIN column, so their
+  rows land with `isin` null and are mapped through the symbol-change history in spec 0002. The
+  holiday API has nothing before 2011, so the 2010 calendar comes from the archive alone
+  (section 6.2).
+- About 4,200 sessions at 1 request a second: roughly 1 to 2 hours of downloads, run in chunks of
   a year so a failure costs one year at most.
 - Index closes start where NSE's archive starts (found in task 0). Earlier index history is a
   separate one-off later (D6 says niftyindices.com or Yahoo).
@@ -300,7 +301,7 @@ cagr-data-platform/
 ```
 
 Stack: Python 3.12, uv, ruff, mypy (strict), pytest, httpx, tenacity, Polars, psycopg 3,
-pydantic-settings, Dagster. Migrations with a small, plain-SQL tool (open question Q3).
+pydantic-settings, Dagster. Migrations with yoyo (plain SQL files).
 
 ## 10. How we will know it works
 
@@ -339,13 +340,13 @@ Each task is one short branch and one PR into main.
 | 7 | Backfill Jun to Aug 2024 into `cagr_test`, then the full history | Acceptance results in the PR |
 | 8 | Five nightly runs | Step one done; spec 0002 starts |
 
-## 12. Open questions for Arush
+## 12. Decisions on the open questions (Arush, 26 Oct 2026)
 
-| # | Question | Recommendation |
+| # | Question | Decision |
 |---|---|---|
-| Q1 | Backfill start: 2011 (ISIN and holiday list exist) or 2010? | 2011 now; 2010 later with spec 0002 |
-| Q2 | Fetch the listing masters and symbol changes as raw snapshots now, even though they are interpreted in spec 0002? | Yes: they cannot be fetched for the past |
-| Q3 | Migration tool: yoyo (what stockdb uses today, plain SQL), Alembic, or a tiny runner of our own? | yoyo, for plain SQL files and familiarity |
-| Q4 | Where do raw files live during the test phase: the laptop, or the Azure Blob account straight away? | Laptop now, Blob when deployed; the storage interface makes it configuration |
-| Q5 | Who gets alerts for a critical failure in the test phase, and how? | Email to Arush only, until deployment |
-| Q6 | Where does the nightly run happen before deployment? NSE must be reachable from it. | Arush's laptop with `dagster dev`, or the VM in a test folder |
+| Q1 | Backfill start | 2010 |
+| Q2 | Fetch listing masters and symbol changes as raw snapshots now | Yes |
+| Q3 | Migration tool | yoyo, plain SQL files |
+| Q4 | Where raw files live | Arush's laptop during the test phase; Azure Blob once deployed, by configuration |
+| Q5 | Alerts for a critical failure | Email to Arush for now; more people later, so recipients are configuration |
+| Q6 | Where the nightly run happens | Arush's laptop (`dagster dev`) now, then the VM |
