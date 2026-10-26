@@ -72,8 +72,8 @@ because this cloud environment cannot.
 | `nse_sme_equity_list` | `https://nsearchives.nseindia.com/emerge/corporates/content/SME_EQUITY_L.csv` | CSV | Today's snapshot only |
 | `nse_symbol_change` | `https://nsearchives.nseindia.com/content/equities/symbolchange.csv` | CSV | Full history in each snapshot |
 
-The format switch between legacy and UDiFF is a row in `raw.feed_format` (section 6), keyed by
-date range, not an `if` in code. If task 0 finds both formats published for an overlapping
+The two bhavcopy formats are two feeds, each with the dates it covers on its `raw.feed` row
+(section 6), not an `if` in code. If task 0 finds both formats published for an overlapping
 period, we fetch both for the overlap and the overlap becomes a parity test.
 
 ### Being polite to NSE
@@ -145,11 +145,11 @@ Migrations live in `db/migrations/` at the repo root as numbered SQL files, one 
 the whole monorepo. Owner role `cagr_platform` runs them; the fetch job connects as `cagr_writer`;
 `cagr_read` reads. Roles and the database itself come from the test database thread.
 
-Server facts (checked 26 Oct 2026): Azure Flexible Server, PostgreSQL 17.11. `btree_gist` is
-trusted, so migration 0001 runs `CREATE EXTENSION IF NOT EXISTS btree_gist` as `cagr_platform`,
-once it is allow-listed in `azure.extensions`. TimescaleDB, pg_partman and pg_cron are not
-available, so yearly partitions are created by migrations and nothing is scheduled inside the
-database.
+Server facts (checked 26 Oct 2026): Azure Flexible Server, PostgreSQL 17.11. No extensions
+are needed. `btree_gist` cannot be enabled, and TimescaleDB, pg_partman and pg_cron are not
+available. So yearly partitions are created by migrations, nothing is scheduled inside the
+database, and no table in this step uses an exclusion constraint. Dated reference rows in later
+specs follow the pattern the test database thread settles on instead of `btree_gist`.
 
 Conventions: session dates are `date` in the venue's time zone; timestamps are `timestamptz` in
 UTC; prices are `numeric(18,4)` in raw (exactly what the file says); quantities are `bigint`;
@@ -181,8 +181,7 @@ weekday with a 404 next to published days is a holiday, recorded with `source = 
 | Table | Purpose | Key columns |
 |---|---|---|
 | `raw.vendor` | Vendors as rows | `vendor_id` (`nse_archives`, `nse_api`), `base_url`, `rate_limit_per_s` |
-| `raw.feed` | Feeds as rows; the schedule reads these | `feed_id`, `vendor_id`, `cadence`, `schedule_cron`, `active` |
-| `raw.feed_format` | Which parser applies to which dates | `feed_id`, `format` (`udiff_v1`, `legacy_v1`), `valid_during daterange` (no overlap, via btree_gist), `url_template` |
+| `raw.feed` | Feeds as rows; the schedule and the parser choice read these | `feed_id`, `vendor_id`, `format` (`udiff_v1`, `legacy_v1`, …), `url_template`, `available_from`, `available_to` (null = still published), `cadence`, `schedule_cron`, `active` |
 | `raw.fetch_attempt` | Every HTTP request, including 404s and failures | `attempt_id`, `run_id`, `feed_id`, `partition_date`, `url`, `http_status`, `error`, `elapsed_ms`, `attempted_at` |
 | `raw.vendor_file` | A receipt for every file received | `file_id`, `feed_id`, `format`, `partition_date`, `url`, `sha256`, `bytes`, `storage_uri`, `received_at`, `run_id`, `revision` (1, 2, …), `supersedes_file_id`, `row_count` |
 | `raw.nse_cm_bar` | One row per security per series per file | `file_id`, `trade_date`, `symbol`, `series`, `isin` (null before 2011), `instrument_type`, `open`, `high`, `low`, `close`, `last`, `prev_close`, `volume`, `traded_value_inr`, `trade_count`, `source_format` |
