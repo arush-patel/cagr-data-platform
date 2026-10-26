@@ -58,23 +58,24 @@ versions; short branches with a PR into main and CI on every PR.
 
 ## 4. Sources
 
-All dates are the session date in IST. URLs are what the design work tested on 8 to 10 Oct 2026;
-the first build task (section 11, task 0) re-confirms each one from a machine that can reach NSE,
-because this cloud environment cannot.
+All dates are the session date in IST. Every URL below was confirmed from Arush's laptop on
+26 Oct 2026 (task 0, 103 requests, no 403s, no cookie needed); the full results, column headers
+and format quirks are in [`0001-source-check.md`](0001-source-check.md).
 
 | Feed id | URL pattern | Format | Available from |
 |---|---|---|---|
-| `nse_cm_bhavcopy_udiff` | `https://nsearchives.nseindia.com/content/cm/BhavCopy_NSE_CM_0_0_0_{YYYYMMDD}_F_0000.csv.zip` | UDiFF CSV in a zip | 8 Jul 2024 |
-| `nse_cm_bhavcopy_legacy` | `https://nsearchives.nseindia.com/content/historical/EQUITIES/{YYYY}/{MON}/cm{DD}{MON}{YYYY}bhav.csv.zip` | Legacy CSV in a zip | 2010 (no ISIN column before 2011) to 5 Jul 2024 |
-| `nse_index_close` | `https://nsearchives.nseindia.com/content/indices/ind_close_all_{DDMMYYYY}.csv` | CSV | To be found in task 0 (404 for 2011 and 2012 dates tested) |
-| `nse_holidays` | `https://www.nseindia.com/api/holiday-master?type=trading&year={YYYY}` | JSON | 2011. Without `year=` it returns only the current year. |
-| `nse_equity_list` | `https://nsearchives.nseindia.com/content/equities/EQUITY_L.csv` | CSV | Today's snapshot only |
-| `nse_sme_equity_list` | `https://nsearchives.nseindia.com/emerge/corporates/content/SME_EQUITY_L.csv` | CSV | Today's snapshot only |
+| `nse_cm_bhavcopy_udiff` | `https://nsearchives.nseindia.com/content/cm/BhavCopy_NSE_CM_0_0_0_{YYYYMMDD}_F_0000.csv.zip` | UDiFF CSV in a zip | 1 Jan 2024. Two header versions: `Rsvd01`–`Rsvd04` with a trailing comma until 20 Jun 2024, `Rsvd1`–`Rsvd4` from 21 Jun 2024 |
+| `nse_cm_bhavcopy_legacy` | `https://nsearchives.nseindia.com/content/historical/EQUITIES/{YYYY}/{MON}/cm{DD}{MON}{YYYY}bhav.csv.zip` | Legacy CSV in a zip | 2010 to 5 Jul 2024. No `ISIN` or `TOTALTRADES` column until 21 Jun 2011 (first file with them: 22 Jun 2011); 2010 dates are not zero-padded (`4-JAN-2010`) |
+| `nse_index_close` | `https://nsearchives.nseindia.com/content/indices/ind_close_all_{DDMMYYYY}.csv` | CSV | 21 Feb 2012. Some files have CRLF line endings; index names change over the years (`S&P CNX Nifty` → `Nifty 50`) |
+| `nse_holidays` | `https://www.nseindia.com/api/holiday-master?type=trading&year={YYYY}` | JSON keyed by segment; read the `CM` key (not the first one), which includes holidays on weekends | 2011. For 2010 it returns 200 with `{}`. Without `year=` it returns only the current year. |
+| `nse_equity_list` | `https://nsearchives.nseindia.com/content/equities/EQUITY_L.csv` | CSV, header names have leading spaces | Today's snapshot only |
+| `nse_sme_equity_list` | `https://nsearchives.nseindia.com/emerge/corporates/content/SME_EQUITY_L.csv` | CSV, two-digit years (`22-Oct-26`) | Today's snapshot only |
 | `nse_symbol_change` | `https://nsearchives.nseindia.com/content/equities/symbolchange.csv` | CSV | Full history in each snapshot |
 
 The two bhavcopy formats are two feeds, each with the dates it covers on its `raw.feed` row
-(section 6), not an `if` in code. If task 0 finds both formats published for an overlapping
-period, we fetch both for the overlap and the overlap becomes a parity test.
+(section 6), not an `if` in code. Both formats are published from 1 Jan to 5 Jul 2024 (about
+130 sessions). We fetch both for the overlap, load the legacy rows as primary, and the overlap
+becomes a parity test: on 5 Jul 2024 all 2,775 rows matched on every shared column.
 
 ### Being polite to NSE
 
@@ -243,13 +244,13 @@ move to it, and a `vendor_revision` warning lists what changed. Nothing is delet
 ### 7.5 Backfill
 
 - Same assets, run as a Dagster backfill over a date range.
-- Start: the first session of 2010 (decided, Q1). The 2010 files have no ISIN column, so their
-  rows land with `isin` null and are mapped through the symbol-change history in spec 0002. The
+- Start: the first session of 2010 (decided, Q1). Files until 21 Jun 2011 (about 370 sessions)
+  have no ISIN or trade-count column, so their rows land with `isin` and `trade_count` null and are mapped through the symbol-change history in spec 0002. The
   holiday API has nothing before 2011, so the 2010 calendar comes from the archive alone
   (section 6.2).
 - About 4,200 sessions at 1 request a second: roughly 1 to 2 hours of downloads, run in chunks of
   a year so a failure costs one year at most.
-- Index closes start where NSE's archive starts (found in task 0). Earlier index history is a
+- Index closes start on 21 Feb 2012, where NSE's archive starts. Earlier index history is a
   separate one-off later (D6 says niftyindices.com or Yahoo).
 
 ## 8. Data-quality checks (raw layer)
@@ -268,7 +269,7 @@ change.
 | `benchmark_present` | Nifty 50 is in the index file | critical |
 | `prices_positive` | open, high, low, close > 0 where volume > 0 | warn |
 | `ohlc_order` | low ≤ open, close ≤ high | warn |
-| `isin_present` | ISIN on every EQ-series row from 2011 | warn |
+| `isin_present` | ISIN on every EQ-series row from 22 Jun 2011 | warn |
 | `vendor_revision` | A re-downloaded file differs from the stored one | warn |
 | `special_session` | A file arrived on a non-listed weekend day | info |
 
@@ -330,7 +331,7 @@ Each task is one short branch and one PR into main.
 
 | # | Task | Output |
 |---|---|---|
-| 0 | Source spike, run on a machine that can reach NSE (Arush's laptop or the VM) | Every URL confirmed, earliest index-close date, overlap of the two bhavcopy formats, trimmed fixture files, notes added to this spec |
+| 0 | Source spike, run on a machine that can reach NSE (Arush's laptop or the VM) | Done 26 Oct 2026: `0001-source-check.md`, fixtures in `platform/tests/fixtures/nse/`, section 4 corrected |
 | 1 | Repo skeleton | uv workspace, `platform` package, ruff, mypy, pytest, CI with Postgres 17, `docs/` |
 | 2 | Migrations 0001 to 0004 | `ops`, `ref`, `raw` schemas, seeds for venue, vendors, feeds, formats and checks, grants for the three roles |
 | 3 | NSE client and bhavcopy parsers (both formats) | Tested against fixtures |
