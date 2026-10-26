@@ -145,6 +145,12 @@ Migrations live in `db/migrations/` at the repo root as numbered SQL files, one 
 the whole monorepo. Owner role `cagr_platform` runs them; the fetch job connects as `cagr_writer`;
 `cagr_read` reads. Roles and the database itself come from the test database thread.
 
+Server facts (checked 26 Oct 2026): Azure Flexible Server, PostgreSQL 17.11. `btree_gist` is
+trusted, so migration 0001 runs `CREATE EXTENSION IF NOT EXISTS btree_gist` as `cagr_platform`,
+once it is allow-listed in `azure.extensions`. TimescaleDB, pg_partman and pg_cron are not
+available, so yearly partitions are created by migrations and nothing is scheduled inside the
+database.
+
 Conventions: session dates are `date` in the venue's time zone; timestamps are `timestamptz` in
 UTC; prices are `numeric(18,4)` in raw (exactly what the file says); quantities are `bigint`;
 money columns end in `_inr` and hold rupees, not crores; no column is silently rounded.
