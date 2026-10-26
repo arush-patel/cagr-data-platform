@@ -6,7 +6,7 @@
 | Date | 2026-10-26 |
 | Owner | Arush |
 | Component | `platform` (the data platform), version 0.1.0 |
-| Database | `cagr_test` (test database, see the "Set up the test database" thread) |
+| Database | `cagr_test`, created 26 Oct 2026 on the stockdb Azure server; empty, no extensions; migrations run as `cagr_platform` |
 | Depends on | Nothing. This is step one. |
 | Next | Spec 0002: reference data (listings, symbol changes, corporate actions). Spec 0003: clean bars. |
 
@@ -195,8 +195,9 @@ weekday with a 404 next to published days is a holiday, recorded with `source = 
 
 Rules for `raw`:
 
-- **Append-only.** Rows are never updated or deleted. Grants give `cagr_writer` INSERT only on
-  `raw` row tables.
+- **Append-only.** Rows are never updated or deleted. The database's default privileges give
+  `cagr_writer` full DML on new tables, so the `raw` migration revokes UPDATE, DELETE and
+  TRUNCATE on the row tables from it.
 - **Every row points at its file.** The primary key of each row table starts with `file_id`.
 - **All series and instruments are kept.** EQ, BE, BZ, SM, ST, debt, ETFs, rights entitlements:
   raw stores everything the file has. Deciding what is an equity listing is spec 0002.
