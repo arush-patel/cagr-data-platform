@@ -149,7 +149,10 @@ Server facts (checked 26 Oct 2026): Azure Flexible Server, PostgreSQL 17.11. No 
 are needed. `btree_gist` cannot be enabled, and TimescaleDB, pg_partman and pg_cron are not
 available. So yearly partitions are created by migrations, nothing is scheduled inside the
 database, and no table in this step uses an exclusion constraint. Dated reference rows in later
-specs follow the pattern the test database thread settles on instead of `btree_gist`.
+specs key on integer surrogate ids, so a no-overlap rule can use the built-in range opclass
+(`EXCLUDE USING gist (int4range(id, id, '[]') WITH =, valid WITH &&)`); the fallback is
+`valid_from` only, `UNIQUE (key, valid_from)`, and the end date derived with `LEAD` in a view.
+UUIDs, where needed, come from the built-in `gen_random_uuid()`.
 
 Conventions: session dates are `date` in the venue's time zone; timestamps are `timestamptz` in
 UTC; prices are `numeric(18,4)` in raw (exactly what the file says); quantities are `bigint`;
