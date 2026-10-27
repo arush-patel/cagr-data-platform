@@ -115,5 +115,5 @@ counted in a check, not guessed.
 
 | # | Question | Recommendation |
 |---|---|---|
-| Q1 | What market-cap floor defines the universe that needs a `cagr_industry`? | Rs 500 crore on the day, which keeps roughly the top 1,200 stocks today. A fixed rupee floor moves with the market, so a rank (top 1,000) may suit backtests better |
+| Q1 | What market-cap floor defines the universe that needs a `cagr_industry`? | A rank: the top 1,000 by market cap on the day. A fixed rupee floor moves with the market, which skews backtests |
 | Q2 | Should a listing with no count before 2024 (delisted, never an index member) be left out of the industry indices? | Yes. It is counted by `shares_present`, so we can see how much history it affects |
