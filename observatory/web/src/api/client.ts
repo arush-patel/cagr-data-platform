@@ -26,3 +26,28 @@ export const getAdjustment = (id: number) =>
   getJson<AdjustmentDetail>(`/api/review/items/adjustment/${id}`);
 
 export const getChange = (id: number) => getJson<ChangeDetail>(`/api/review/items/change/${id}`);
+
+async function postJson<T>(path: string, body: unknown): Promise<T> {
+  const response = await fetch(path, {
+    method: "POST",
+    headers: { Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    // The API says why a decision was refused in plain words; show that, not the status.
+    const detail = await response
+      .json()
+      .then((b: { detail?: unknown }) => (typeof b.detail === "string" ? b.detail : null))
+      .catch(() => null);
+    throw new Error(detail ?? `${response.status} ${response.statusText}`);
+  }
+  return (await response.json()) as T;
+}
+
+export type Approve = Schemas["Approve"];
+
+export const approve = (kind: ItemKind, id: number, body: Approve) =>
+  postJson<Item>(`/api/review/items/${kind}/${id}/approve`, body);
+
+export const reject = (kind: ItemKind, id: number, note: string) =>
+  postJson<Item>(`/api/review/items/${kind}/${id}/reject`, { note });

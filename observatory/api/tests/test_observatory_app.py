@@ -27,7 +27,7 @@ def test_health(tmp_path: Path) -> None:
 
 def test_health_reports_database_failure(tmp_path: Path) -> None:
     body = client(tmp_path, failing).get("/api/health").json()
-    assert body == {"version": body["version"], "database": False, "detail": "RuntimeError"}
+    assert (body["database"], body["detail"], body["reviewer"]) == (False, "RuntimeError", None)
 
 
 def test_serves_ui_for_any_path_but_api(tmp_path: Path) -> None:

@@ -209,6 +209,7 @@ name = "cagr-observatory"
 version = "0.1.0"
 source = { editable = "observatory/api" }
 dependencies = [
+    { name = "cagr-data" },
     { name = "cagr-toolkit" },
     { name = "fastapi" },
     { name = "pydantic-settings" },
@@ -217,6 +218,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "cagr-data", editable = "platform" },
     { name = "cagr-toolkit", editable = "toolkit" },
     { name = "fastapi", specifier = ">=0.115" },
     { name = "pydantic-settings", specifier = ">=2.6" },

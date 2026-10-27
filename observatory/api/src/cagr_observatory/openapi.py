@@ -13,8 +13,14 @@ from cagr_observatory.settings import Settings
 SCHEMA = Path(__file__).resolve().parents[3] / "web" / "src" / "api" / "openapi.json"
 
 
+def _unused() -> Any:
+    raise RuntimeError("the schema is built without a database")
+
+
 def schema() -> dict[str, Any]:
-    return create_app(Settings(web_dist=Path("/nonexistent"))).openapi()
+    """The full API, decisions included, as with a reviewer set."""
+    settings = Settings(web_dist=Path("/nonexistent"), reviewer="schema")
+    return create_app(settings, connect=_unused, connect_review=_unused).openapi()
 
 
 def text() -> str:

@@ -43,14 +43,30 @@ def test_demerger_is_always_confirmed() -> None:
     assert "always confirmed by a person" in reasons.adjustment_reason(row)
 
 
-def test_possible_merge() -> None:
-    row = {
-        "change_kind": "new_listing", "listing_id": 9, "symbol": "ABC", "board": "main",
-        "date": date(2024, 2, 6), "proposed_by": "rules", "payload": {},
-        "evidence": {"candidates": [3]},
+def change(**kw: Any) -> dict[str, Any]:
+    row: dict[str, Any] = {
+        "change_kind": "merge", "listing_id": 9, "symbol": "ABC", "status": "pending",
+        "date": date(2024, 2, 6), "proposed_by": "rules", "payload": {}, "evidence": {},
     }  # fmt: skip
+    return row | kw
+
+
+def test_possible_merge() -> None:
+    row = change(payload={"merged_id": 9, "into_id": 3}, evidence={"candidates": [3]})
     assert reasons.change_title(row) == "Possible merge"
     assert reasons.change_reason(row, ["ABCOLD"]) == (
-        "ABC appeared on 06 Feb 2024 as a new listing. It may be the same security as ABCOLD."
-        " Merge it if so; reject this item to keep it separate."
+        "ABC came back on 06 Feb 2024 with a new ISIN after more than 20 sessions without a"
+        " trade, so it was made a new listing. Approve to merge it into ABCOLD if it is the same"
+        " security; reject to keep the two apart."
+    )
+    assert reasons.change_title(row | {"status": "applied"}) == "Merge"
+
+
+def test_possible_index_rename() -> None:
+    row = change(
+        change_kind="index_rename", symbol="Nifty Next", payload={"new_name": "Nifty Next"}
+    )
+    assert reasons.change_title(row) == "Possible rename"
+    assert "Nifty Next, appeared on 06 Feb 2024 as CNX Junior stopped" in reasons.change_reason(
+        row, ["CNX Junior"]
     )

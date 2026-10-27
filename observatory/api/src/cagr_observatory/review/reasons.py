@@ -23,7 +23,8 @@ def _num(x: float | None) -> str:
 def adjustment_title(row: dict[str, Any]) -> str:
     kind = row["action_kind"]
     if kind is None:
-        return f"Unexplained jump {X}{_num(row['observed_factor'])}"
+        observed = row["observed_factor"]
+        return "Unexplained jump" + (f" {X}{_num(observed)}" if observed else "")
     if row["ratio_new"] is not None and row["ratio_old"] is not None:
         return f"{kind.capitalize()} {row['ratio_new']:g}:{row['ratio_old']:g}"
     return str(kind).capitalize()
@@ -68,34 +69,40 @@ CHANGE_TITLES = {
 
 
 def change_title(row: dict[str, Any]) -> str:
-    candidates = row["evidence"].get("candidates")
-    if row["change_kind"] in ("new_listing", "index_rename") and candidates:
-        return "Possible rename" if row["change_kind"] == "index_rename" else "Possible merge"
     kind = str(row["change_kind"])
+    if row["status"] == "pending" and kind == "merge" and row["proposed_by"] == "rules":
+        return "Possible merge"
+    if row["status"] == "pending" and kind == "index_rename":
+        return "Possible rename"
     return CHANGE_TITLES.get(kind, kind)
 
 
 def change_reason(row: dict[str, Any], candidate_symbols: list[str]) -> str:
-    kind, payload, evidence = row["change_kind"], row["payload"], row["evidence"]
+    """Why a listing change waits. The rules raise two kinds (spec 0002, 5.2.2 and 5.5): a
+    symbol back with a new ISIN after a long silence, and a new index name."""
+    kind, payload = row["change_kind"], row["payload"]
     symbol = row["symbol"] or f"listing {row['listing_id']}"
     others = ", ".join(candidate_symbols) or "another listing"
     when = _date(row["date"])
-    if kind == "new_listing" and evidence.get("candidates"):
+    if kind == "merge" and row["proposed_by"] == "rules":
         return (
-            f"{symbol} appeared on {when} as a new listing. It may be the same security as"
-            f" {others}. Merge it if so; reject this item to keep it separate."
+            f"{symbol} came back on {when} with a new ISIN after more than 20 sessions without a"
+            f" trade, so it was made a new listing. Approve to merge it into {others} if it is"
+            " the same security; reject to keep the two apart."
         )
-    if kind == "index_rename" or (kind == "new_listing" and row["board"] is None):
-        return f"A new index name, {symbol}, appeared on {when}. Is it a rename of {others}?"
-    who = "The rules" if row["proposed_by"] == "rules" else row["proposed_by"]
     if kind == "merge":
-        return f"{who} proposed merging {symbol} into {others} from {when}."
-    if kind in ("symbol_change", "isin_change"):
-        what = "symbol" if kind == "symbol_change" else "ISIN"
         return (
-            f"{who} proposed changing the {what} of {symbol} from {payload.get('old', '?')}"
-            f" to {payload.get('new', '?')} on {when}."
+            f"{row['proposed_by']} proposed merging {symbol} into {others}. Approve to merge;"
+            " reject to keep the two apart."
         )
+    if kind == "index_rename":
+        name = payload.get("new_name") or symbol
+        return (
+            f"A new index name, {name}, appeared on {when} as {others} stopped. If it is a"
+            " rename, approve it with the index it renames; otherwise reject it to keep it as a"
+            " new index."
+        )
+    who = "The rules" if row["proposed_by"] == "rules" else row["proposed_by"]
     return f"{who} proposed a {kind.replace('_', ' ')} on {symbol} from {when}."
 
 

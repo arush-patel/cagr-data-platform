@@ -14,14 +14,28 @@ export function ReviewPage() {
   const [search, setSearch] = useSearchParams();
   const navigate = useNavigate();
   const tab = search.get("tab") === "history" ? "decided" : "pending";
-  const { data: items, isError, isLoading } = useQuery({
+  const { data, isError, isLoading } = useQuery({
     queryKey: ["review", tab],
     queryFn: () => getItems(tab),
   });
 
+  // The order the queue shows them in: adjustments, then listing changes, each oldest first.
+  const items = data && [
+    ...data.filter((i) => i.kind === "adjustment"),
+    ...data.filter((i) => i.kind === "change"),
+  ];
   const kind = params.kind as ItemKind | undefined;
   const id = params.id ? Number(params.id) : undefined;
   const open = (item: Item) => navigate({ pathname: `/review/${item.kind}/${item.id}`, search: search.toString() });
+
+  // After a decision, open the next item in the list, or the empty page after the last one.
+  const next = (decided: Item) => {
+    const list = items ?? [];
+    const at = list.findIndex((i) => i.kind === decided.kind && i.id === decided.id);
+    const following = list[at + 1] ?? (at > 0 ? list[at - 1] : undefined);
+    if (following) open(following);
+    else navigate({ pathname: "/review", search: search.toString() });
+  };
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -55,8 +69,8 @@ export function ReviewPage() {
         {items && <Queue items={items} history={tab === "decided"} selected={{ kind, id }} onOpen={open} />}
       </aside>
       <section className="item">
-        {kind === "adjustment" && id !== undefined && <AdjustmentView id={id} />}
-        {kind === "change" && id !== undefined && <ChangeView id={id} />}
+        {kind === "adjustment" && id !== undefined && <AdjustmentView id={id} onDecided={next} />}
+        {kind === "change" && id !== undefined && <ChangeView id={id} onDecided={next} />}
         {(kind === undefined || id === undefined) && (
           <p className="empty">
             {items?.length === 0 && tab === "pending"

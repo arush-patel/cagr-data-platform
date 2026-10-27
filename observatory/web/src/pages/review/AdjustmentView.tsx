@@ -1,11 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { getAdjustment } from "../../api/client";
+import { getAdjustment, type Item } from "../../api/client";
 import { formatNumber } from "../../format";
+import { Decision } from "./Decision";
 import { ItemHeader } from "./ItemHeader";
 import { PriceChart } from "./PriceChart";
 
-export function AdjustmentView({ id }: { id: number }) {
+export function AdjustmentView({ id, onDecided }: { id: number; onDecided: (item: Item) => void }) {
   const { data: item, isError } = useQuery({
     queryKey: ["review", "adjustment", id],
     queryFn: () => getAdjustment(id),
@@ -46,6 +47,12 @@ export function AdjustmentView({ id }: { id: number }) {
       ) : (
         <p className="empty">No closes found around the ex-date.</p>
       )}
+      <Decision
+        key={item.id}
+        item={item}
+        approveLabel={`Approve factor ${formatNumber(item.chart_factor)}`}
+        onDecided={onDecided}
+      />
     </article>
   );
 }

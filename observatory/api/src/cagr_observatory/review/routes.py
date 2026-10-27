@@ -34,12 +34,18 @@ def _adjustment(row: dict[str, Any]) -> dict[str, Any]:
 
 def _change(conn: Connection, row: dict[str, Any]) -> tuple[dict[str, Any], list[int]]:
     candidates = [int(c) for c in row["evidence"].get("candidates") or []]
-    into = row["payload"].get("into")
-    if row["change_kind"] == "merge" and into is not None:
+    into = row["payload"].get("into_id")
+    if row["change_kind"] == "merge" and into is not None and int(into) not in candidates:
         candidates = [int(into), *candidates]
     symbols = [str(r["symbol"]) for r in queries.listings(conn, candidates) if r["symbol"]]
     item = _item("change", row, reasons.change_title(row), reasons.change_reason(row, symbols))
     return item, candidates
+
+
+def item_row(conn: Connection, kind: str, row: dict[str, Any]) -> Item:
+    """A queue row for an adjustment or change, as the queue lists it."""
+    found = _adjustment(row) if kind == "adjustment" else _change(conn, row)[0]
+    return Item.model_validate(found)
 
 
 def router(connect: Callable[[], Connection]) -> APIRouter:
