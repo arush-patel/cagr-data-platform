@@ -24,10 +24,14 @@ industry review list and the cap-weighted industry indices all read it (decision
   `mcap{DDMMYYYY}.csv`, about 3,200 rows a day:
   `Trade Date, Symbol, Series, Security Name, Category, Last Trade Date, Face Value(Rs.),
   Issue Size, Close Price/Paid up value(Rs.), Market Cap(Rs.)`. `Issue Size` is shares
-  outstanding. There is no ISIN, so rows join on symbol and series. It is in the zip on
-  1 Apr 2024 and not on 1 Jan 2024; the first date is found by the backfill.
+  outstanding. There is no ISIN, so rows join on symbol and series. It first appears on
+  1 Feb 2024 (`MCAP01022024.csv`; 31 Jan 2024 has none). The last rows are totals (`Listed`,
+  `Permitted`, `Total`) with a blank series. `Permitted` securities are listed elsewhere and
+  traded on NSE. Rows whose `Last Trade Date` is earlier than the trade date carry a stale
+  close.
 - **2010 to 2013, index members only.** The same zip's `Ix` and `ffix` files carry `ISSUE_CAP`
-  for about 700 index constituents. They stop in 2014.
+  for index constituents: about 500 distinct stocks in 2010 (CNX 500 among them) and again
+  in 2013, when only `ffix` remains. They stop in 2014.
 - **2014 to early 2024, nothing in bulk.** We checked NSE's PR zips (2015, 2019, 2022), NSE's
   market summary files (totals only), BSE's bhavcopy (`NO_OF_SHRS` is shares traded, not
   outstanding), BSE's scrip master (refuses scripts) and the NSDL, MCA and SEBI sites (no bulk
@@ -72,8 +76,9 @@ industry review list and the cap-weighted industry indices all read it (decision
 ### 5.1 The mcap feed
 
 A new daily feed, `nse_mcap`, fetches the PR zip after the bhavcopy and keeps only the mcap
-file. It follows spec 0001's rules (politeness, receipts, revisions). The backfill walks back
-from today until the file is missing for 10 sessions in a row, and records the first date.
+file. It follows spec 0001's rules (politeness, receipts, revisions). Its backfill runs from
+1 Feb 2024. A second feed, `nse_index_issue_cap`, reads the `Ix` and `ffix` files of the same
+zip for 2010 to 2013. Both run in the session backfill; on other days neither fetches.
 
 ### 5.2 Share periods from the feed
 
