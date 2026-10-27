@@ -8,7 +8,8 @@ Format facts, from the source check (docs/specs/0001-source-check.md):
 - UDiFF (from 1 Jan 2024): until 20 Jun 2024 the reserved columns are Rsvd01..Rsvd04 and the
   header ends with a comma; from 21 Jun 2024 they are Rsvd1..Rsvd4.
 - Legacy (2010 to 5 Jul 2024): no TOTALTRADES or ISIN columns until 21 Jun 2011. Every line
-  ends with a comma. Dates look like 05-JUL-2024, or 4-JAN-2010 in 2010.
+  ends with a comma. Dates look like 05-JUL-2024, or 4-JAN-2010 in 2010. Some 2020 files write
+  13-Jul-20 (a two-digit year, read as 20xx) and have no trailing comma.
 - An instrument without an ISIN of its own (the partly-paid E1 series of a rights issue, Feb 2021)
   can carry the placeholder DUMMY. Anything that is not an ISIN is read as missing; the stored
   file keeps what NSE sent.
@@ -131,7 +132,9 @@ def parse_legacy(csv: bytes, expected_date: date | None = None) -> pl.DataFrame:
     raw = body(csv, names)
     has_isin = "ISIN" in names
     frame = raw.select(
-        trade_date=text("TIMESTAMP").str.strptime(pl.Date, "%d-%b-%Y", strict=False),
+        trade_date=text("TIMESTAMP")
+        .str.replace(r"-(\d{2})$", "-20$1")  # 13-Jul-20 in some 2020 files
+        .str.strptime(pl.Date, "%d-%b-%Y", strict=False),
         symbol=text("SYMBOL"),
         series=text("SERIES").fill_null(""),
         isin=_isin("ISIN") if has_isin else pl.lit(None, pl.String),

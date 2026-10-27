@@ -144,3 +144,14 @@ def test_a_placeholder_isin_is_missing() -> None:
             "ABFRL,EQ,1,2,1,2,2,1,10,20,16-FEB-2021,5,INE647O01011,"]  # fmt: skip
     frame = parse_legacy("\n".join([header, *rows, ""]).encode(), date(2021, 2, 16))
     assert frame["isin"].to_list() == [None, "INE647O01011"]
+
+
+def test_a_two_digit_year_without_a_trailing_comma() -> None:
+    # 13 Jul 2020: TIMESTAMP is 13-Jul-20 and the lines have no trailing comma.
+    header = ("SYMBOL,SERIES,OPEN,HIGH,LOW,CLOSE,LAST,PREVCLOSE,TOTTRDQTY,TOTTRDVAL,TIMESTAMP,"
+              "TOTALTRADES,ISIN")  # fmt: skip
+    row = "20MICRONS,EQ,32.85,33.85,31.85,33.45,33.85,32.3,187303,6187285.7,13-Jul-20,1382,"
+    row += "INE144J01027"
+    frame = parse_legacy(f"{header}\n{row}\n".encode(), date(2020, 7, 13))
+    assert frame["trade_date"].to_list() == [date(2020, 7, 13)]
+    assert frame["trade_count"].to_list() == [1382]
