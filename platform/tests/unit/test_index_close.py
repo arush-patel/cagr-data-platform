@@ -98,3 +98,12 @@ def test_an_exact_duplicate_row_is_kept_once(nse_fixtures: Path) -> None:
     changed = lines[1][:-3] + b"99" + lines[1][-1:]  # the same index, another div yield
     with pytest.raises(FileShapeError):
         parse_index_close(b"".join([*lines[:2], changed, *lines[2:]]), DAY)
+
+
+def test_a_volume_with_a_zero_fraction_is_read(nse_fixtures: Path) -> None:
+    # 20 Mar 2015 writes volumes as 179982752.00; a real fraction is still a shape error.
+    csv = (nse_fixtures / "ind_close_all_23102026.csv").read_bytes()
+    frame = parse_index_close(csv.replace(b",364190826,", b",364190826.00,"), DAY)
+    assert frame["volume"][0] == 364190826
+    with pytest.raises(FileShapeError):
+        parse_index_close(csv.replace(b",364190826,", b",364190826.50,"), DAY)
