@@ -125,7 +125,10 @@ After spec 0002's listing and adjustment steps for session *d*:
 3. Pick one row per listing (section 3) and replace *d*'s bars.
 4. Rebuild `clean.adjustment_step` for listings whose adjustments changed today.
 5. Rebuild the week and month that contain *d*, and every weekly and monthly bar of a listing
-   whose adjustments changed today.
+   whose adjustments changed today. The adjusted values come from the same step and hold rules as
+   `clean.bar_1d_adjusted`, computed inline rather than by joining the view (the join took about
+   15 minutes a year on Azure). A full rebuild does the periods a year at a time, committing
+   after each, so no single statement runs long.
 6. Run the checks.
 
 The full rebuild (`python -m cagr_data.clean.rebuild 2010-01-01 2026-10-26`) runs the same steps

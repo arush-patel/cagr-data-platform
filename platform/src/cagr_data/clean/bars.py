@@ -130,13 +130,24 @@ def build_periods(
             built AS (SELECT max(date) AS d FROM clean.bar_1d),
             state AS (SELECT max(adjustment_id) AS id FROM ref.price_adjustment
                        WHERE status = 'applied'),
+            -- clean.bar_1d_adjusted, inlined: joining the view back to bar_1d looked each
+            -- adjusted row up one at a time and took about 15 minutes a year on Azure.
             days AS (
                 SELECT u.listing_id, u.date, u.open, u.high, u.low, u.close, u.volume,
-                       u.value_traded, u.trade_count, a.open AS a_open, a.high AS a_high,
-                       a.low AS a_low, a.close AS a_close, a.volume AS a_volume,
-                       a.listing_id IS NULL AS held
+                       u.value_traded, u.trade_count,
+                       u.open::double precision * f.factor AS a_open,
+                       u.high::double precision * f.factor AS a_high,
+                       u.low::double precision * f.factor AS a_low,
+                       u.close::double precision * f.factor AS a_close,
+                       u.volume::double precision / f.factor AS a_volume,
+                       coalesce(u.date >= h.held_from, false) AS held
                   FROM clean.bar_1d u
-                  LEFT JOIN clean.bar_1d_adjusted a USING (listing_id, date)
+                  LEFT JOIN clean.adjustment_step s
+                    ON s.listing_id = u.listing_id AND s.valid_from <= u.date
+                   AND s.valid_to > u.date
+                  LEFT JOIN clean.adjustment_hold h ON h.listing_id = u.listing_id
+                 CROSS JOIN LATERAL (SELECT coalesce(s.cum_factor, 1.0::double precision)
+                                            AS factor) f
                  WHERE u.date BETWEEN %(first)s AND %(last)s {day_only})
             INSERT INTO {table} (listing_id, period_start, period_end, open, high, low, close,
                    volume, value_traded, trade_count, session_count, adj_open, adj_high, adj_low,
@@ -317,8 +328,11 @@ def main(argv: list[str] | None = None) -> int:
         conn.commit()
         counted = shares.build_shares(conn)
         conn.commit()
-        periods = build_periods(conn, args.start, args.end)
-        conn.commit()
+        periods: dict[str, int] = {}
+        for lo, hi in years:  # a year at a time, so no statement runs long
+            for table, n in build_periods(conn, lo, hi).items():
+                periods[table] = periods.get(table, 0) + n
+            conn.commit()
         failed = check(conn, run_id, args.start, args.end)
         runs.finish_run(conn, run_id, succeeded=not failed)
         conn.commit()
