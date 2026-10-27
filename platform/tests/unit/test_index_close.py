@@ -75,3 +75,14 @@ def test_header_must_match(nse_fixtures: Path) -> None:
 def test_bad_values_raise(nse_fixtures: Path, old: bytes, new: bytes) -> None:
     with pytest.raises(FileShapeError):
         parse_index_close(_csv(nse_fixtures).replace(old, new, 1), DAY)
+
+
+def test_slashed_dates_are_read(nse_fixtures: Path) -> None:
+    # From 9 Jun 2014 some files write the date as 09/06/2014.
+    csv = (
+        (nse_fixtures / "ind_close_all_23102026.csv")
+        .read_bytes()
+        .replace(b"23-10-2026", b"23/10/2026")
+    )
+    frame = parse_index_close(csv, date(2026, 10, 23))
+    assert frame["trade_date"].unique().to_list() == [date(2026, 10, 23)]

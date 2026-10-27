@@ -2,7 +2,8 @@
 
 The header has been the same since the first file (21 Feb 2012). Index names are kept as sent:
 they change over the years (S&P CNX Nifty, then Nifty 50) and mapping them to a stable index is a
-later spec. Missing values are "-" (a points index has no open, high, low or valuation ratios).
+later spec. The date is DD-MM-YYYY, or DD/MM/YYYY in some years (from Jun 2014); both are read.
+Missing values are "-" (a points index has no open, high, low or valuation ratios).
 Turnover is in crores, as the file says; the loader does not convert it.
 """
 
@@ -11,7 +12,7 @@ from datetime import date
 import polars as pl
 
 from cagr_data.vendors.errors import FileShapeError, TradeDateMismatchError
-from cagr_data.vendors.nse.csvfile import body, cast, check_dates_parsed, header, parse_date, text
+from cagr_data.vendors.nse.csvfile import body, cast, check_dates_parsed, header, text
 
 PRICE = pl.Decimal(18, 4)
 
@@ -45,7 +46,10 @@ def parse_index_close(csv: bytes, expected_date: date | None = None) -> pl.DataF
         raise FileShapeError(f"unexpected index close header: {names}")
     raw = body(csv, names)
     frame = raw.select(
-        trade_date=parse_date("Index Date", "%d-%m-%Y"),
+        # 09-06-2014 in most years, 09/06/2014 in some (from Jun 2014).
+        trade_date=text("Index Date")
+        .str.replace_all("/", "-")
+        .str.strptime(pl.Date, "%d-%m-%Y", strict=False),
         index_name=text("Index Name"),
         open=text("Open Index Value"),
         high=text("High Index Value"),
