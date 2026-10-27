@@ -52,5 +52,9 @@ database. Assets, all in group `nse`:
 | `nse_equity_list`, `nse_sme_equity_list`, `nse_symbol_change` | none | daily 07:30 |
 
 A backfill runs in this order, a year at a time: `nse_cm_bhavcopy` and `nse_index_close` over
-the range, then `xnse_calendar` (which records the 2010 holidays the archive proves), then
-`nse_session_complete` over the same range.
+the range, then `nse_holidays` and `xnse_calendar` (which records the 2010 holidays the archive
+proves), then `nse_session_complete` over the same range. One command does all of it:
+
+```sh
+DAGSTER_HOME=~/.dagster uv run python -m cagr_data.orchestration.backfill 2024-06-01 2024-08-31
+```

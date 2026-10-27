@@ -104,8 +104,14 @@ class _Run:
         self.conn.commit()
 
 
+RUN_KIND_TAG = "cagr/run_kind"
+
+
 def _kind(context: dg.AssetExecutionContext) -> RunKind:
-    return "backfill" if context.run.tags.get("dagster/backfill") else "nightly"
+    tags = context.run.tags
+    if tags.get(RUN_KIND_TAG) == "backfill" or tags.get("dagster/backfill"):
+        return "backfill"
+    return "nightly"
 
 
 def _fetch(
@@ -210,7 +216,11 @@ def nse_index_close(
 @dg.asset(
     check_specs=_specs("nse_holidays", SNAPSHOT_CHECKS),
     group_name="nse",
-    description="NSE's holiday list for this year and next; a changed list is a revision",
+    description=(
+        "NSE's holiday lists from 2011 (the first year the API has) to next year. Past years are"
+        " fetched once; this year and next are fetched again each week, and a changed list is a"
+        " revision"
+    ),
 )
 def nse_holidays(
     context: dg.AssetExecutionContext, db: PlatformDatabase, raw: RawStorage, nse: NseClient
@@ -219,10 +229,10 @@ def nse_holidays(
     fetched: list[FetchOutcome] = []
     outcomes: list[Outcome] = []
     critical: list[Outcome] = []
-    for y in (year, year + 1):
+    for y in range(FIRST_HOLIDAY_LIST.year, year + 2):
         jan1 = date(y, 1, 1)
         f, o, c = _fetch(context, db, raw, nse, "nse_holidays", jan1, "manual",
-                         revision_check=True, feed_ids=["nse_holidays"])  # fmt: skip
+                         revision_check=y >= year, feed_ids=["nse_holidays"])  # fmt: skip
         fetched += f
         outcomes += o
         critical += c

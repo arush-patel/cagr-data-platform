@@ -11,6 +11,7 @@ dependencies = [
     "httpx>=0.28",
     "tenacity>=9.0",
     "dagster>=1.9",
+    "python-dotenv>=1.0",
 ]
 
 [build-system]
