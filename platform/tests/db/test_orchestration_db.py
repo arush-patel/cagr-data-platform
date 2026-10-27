@@ -10,6 +10,7 @@ import psycopg
 import pytest
 
 from cagr_data.orchestration import assets
+from cagr_data.orchestration.backfill import backfill
 from cagr_data.orchestration.resources import NseClient, PlatformDatabase, RawStorage
 from cagr_data.vendors.http import VendorClient
 
@@ -27,6 +28,12 @@ REQUESTS: list[str] = []
 
 def _nse(request: httpx.Request) -> httpx.Response:
     REQUESTS.append(request.url.path)
+    if request.url.path == "/api/holiday-master":
+        if request.url.params.get("year") == "2026":
+            return httpx.Response(
+                200, content=(FIXTURES / "holiday-master_trading_2026.json").read_bytes()
+            )
+        return httpx.Response(200, content=b"{}")
     name = SERVED.get(request.url.path)
     if name is None:
         return httpx.Response(404, text="<html>not found</html>")
@@ -143,3 +150,36 @@ def test_archive_proof_for_2010(resources: dict[str, object], dagster_db: str) -
             "SELECT is_session, reason FROM ref.calendar_session WHERE date = '2010-01-05'"
         ).fetchone()
     assert day == (False, "holiday")
+
+
+def test_holiday_lists_from_2011(resources: dict[str, object], dagster_db: str) -> None:
+    assert dg.materialize([assets.nse_holidays], resources=resources).success
+    years = range(2011, assets.today_ist().year + 2)
+    assert len(REQUESTS) == len(years)
+    assert dg.materialize([assets.nse_holidays], resources=resources).success
+    assert len(REQUESTS) == len(years) + 2  # past years are not fetched again
+    with psycopg.connect(dagster_db) as conn:
+        files = conn.execute(
+            "SELECT count(*), count(*) FILTER (WHERE row_count > 0) FROM raw.vendor_file"
+            " WHERE feed_id = 'nse_holidays'"
+        ).fetchone()
+        holidays = conn.execute(
+            "SELECT count(*) FROM ref.calendar_exception WHERE kind = 'holiday'"
+        ).fetchone()
+    assert files == (len(years), 1)
+    assert holidays == (20,)
+
+
+def test_backfill_a_short_range(resources: dict[str, object], dagster_db: str) -> None:
+    failures = backfill(date(2024, 7, 6), date(2024, 7, 8), resources, log=False)
+    # Sat 6 and Sun 7 Jul: 404s, not sessions. Mon 8 Jul: the bhavcopy arrives, the index
+    # file does not (the fake NSE has none), so only file_arrived fails.
+    assert failures == ["2024-07-08 file_arrived: file_arrived"]
+    with psycopg.connect(dagster_db) as conn:
+        kinds = conn.execute("SELECT DISTINCT kind FROM ops.run").fetchall()
+        sessions = conn.execute(
+            "SELECT date FROM ref.calendar_session WHERE is_session"
+            " AND date BETWEEN '2024-07-06' AND '2024-07-08'"
+        ).fetchall()
+    assert set(kinds) <= {("backfill",), ("manual",)}
+    assert sessions == [(date(2024, 7, 8),)]

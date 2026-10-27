@@ -47,6 +47,12 @@ snapshot_schedule = dg.ScheduleDefinition(
     job=snapshot_job, cron_schedule="30 7 * * *", execution_timezone="Asia/Kolkata"
 )
 
+RESOURCES = {
+    "db": PlatformDatabase(url=dg.EnvVar("CAGR_PIPELINE_DATABASE_URL")),
+    "raw": RawStorage(root=dg.EnvVar("CAGR_RAW_ROOT")),
+    "nse": NseClient(),
+}
+
 defs = dg.Definitions(
     assets=[
         assets.nse_cm_bhavcopy,
@@ -60,9 +66,5 @@ defs = dg.Definitions(
     ],
     jobs=[session_job, calendar_job, snapshot_job],
     schedules=[nse_session_evening, calendar_schedule, snapshot_schedule],
-    resources={
-        "db": PlatformDatabase(url=dg.EnvVar("CAGR_PIPELINE_DATABASE_URL")),
-        "raw": RawStorage(root=dg.EnvVar("CAGR_RAW_ROOT")),
-        "nse": NseClient(),
-    },
+    resources=RESOURCES,
 )
