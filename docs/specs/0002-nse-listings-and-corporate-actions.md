@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft for review. Open questions are in section 11. |
+| Status | Agreed. Arush answered the open questions on 27 Oct 2026 (section 11). |
 | Date | 2026-10-27 |
 | Owner | Arush |
 | Component | `platform` (`cagr_data.reference`), version 0.2.0 |
@@ -46,10 +46,11 @@ Nothing here changes a price. Spec 0003 applies the factors to build clean bars.
 - Clean and adjusted bars, weekly and monthly bars (spec 0003).
 - Shares outstanding and market cap (D5), and the universes built on them.
 - Industry classification and its approval workflow (D14 to D17), and Nifty index membership.
-- The review page and Teams cards. Until the Observatory has a page for it, a person reviews
-  with a command (section 7.4).
+- The review page itself. It is the first page of the new Observatory and is built in its own
+  thread on top of this spec's tables (section 7.4). Teams cards come later.
 - BSE and other venues. A second venue adds an instrument table above listings (section 6.1).
-- Total-return series. Dividends are recorded but don't adjust prices (Q3).
+- Total-return series. Ordinary dividends are recorded but don't adjust prices; extraordinary
+  dividends do (Q3).
 
 ## 3. Decisions this spec relies on
 
@@ -166,12 +167,16 @@ valid_to > d)`. That's the rule the toolkit already assumes.
 
 ### 6.1 Listings
 
+**`ref.listing` is the stock master: the one list of every security we track**, with one row for
+each, whether it still trades or not. The view `ref.listing_current` puts each listing next to
+its current symbol and ISIN, so "which ISINs are we tracking?" is one query.
+
 | Table | One row per | Main columns |
 |---|---|---|
 | `ref.listing` | listing | `listing_id` (integer identity), `venue_id` (`XNSE`), `asset_class` (`equity`, `etf`, `reit`, `invit`, `index`), `board` (`main`, `sme`, null for indices), `name` (latest from the masters), `listed_on` (the master's listing date when known), `first_session`, `last_session`, `status` (`active`, `inactive`, `merged`), `merged_into` |
 | `ref.listing_symbol` | symbol period of a listing | `listing_id`, `symbol`, `valid_from`, `valid_to`, `change_id` |
 | `ref.listing_isin` | ISIN period of a listing | `listing_id`, `isin`, `valid_from`, `valid_to`, `change_id` |
-| `ref.listing_change` | change, applied or waiting | `change_id`, `kind` (`new_listing`, `symbol_change`, `isin_change`, `merge`, `index_rename`), `listing_id`, `effective_date`, `payload` (jsonb: old and new values), `evidence` (jsonb: file ids, rule, matching rows), `status` (`applied`, `pending`, `rejected`), `auto` (true when the rules applied it), `proposed_by`, `decided_by`, `decided_at`, `note` |
+| `ref.listing_change` | change, applied or waiting | `change_id`, `kind` (`new_listing`, `symbol_change`, `isin_change`, `merge`, `index_rename`), `listing_id`, `effective_date`, `payload` (jsonb: old and new values), `evidence` (jsonb: file ids, rule, matching rows), `status` (`applied`, `pending`, `rejected`), `auto` (true when the rules applied it), `proposed_by` (`rules`, or the person's name), `decided_by`, `decided_at`, `note` |
 
 Rules the database enforces:
 
@@ -181,7 +186,21 @@ Rules the database enforces:
 - **No symbol or ISIN on two listings on the same day.** A text column can't go in a gist
   exclusion without `btree_gist`, which we can't enable, so a critical `ref`-layer check does
   this after each session's step (section 8).
-- **Someone else decides.** `decided_by <> proposed_by` (D16).
+- **Someone else decides.** `decided_by <> proposed_by` (D16). Rows the rules propose carry
+  `proposed_by = 'rules'`, so any person can decide them.
+
+The `evidence` of a change has a fixed shape, so the review page can show it without working it
+out again:
+
+| Key | Present for | Value |
+|---|---|---|
+| `rule` | every change | `"5.2.1"` to `"5.2.4"`, `"5.3"`, `"5.5"` or `"manual"` |
+| `session` | every change | the session date the rule ran on |
+| `file_ids` | every change | the `raw.vendor_file` ids it read |
+| `row` | rule changes | the bhavcopy row: `symbol`, `series`, `isin`, `close`, `volume` |
+| `previous` | symbol and ISIN changes | the listing's last row before the change: `date`, `symbol`, `isin`, `close` |
+| `symbolchange` | rule 5.2.3 | the `symbolchange.csv` row: `old_symbol`, `new_symbol`, `date` |
+| `candidates` | review items about a possible merge or rename | the `listing_id`s it could belong to |
 
 `ref.listing_change` is the audit trail: the symbol and ISIN tables can always be rebuilt from
 its applied rows.
@@ -195,7 +214,7 @@ each venue. NSE alone doesn't need it.
 |---|---|---|
 | `raw.nse_corporate_action` | row of an API response | `file_id`, `symbol`, `series`, `isin`, `company`, `subject`, `ex_date`, `record_date`, `face_value`, plus the other fields the response carries, as text |
 | `ref.corporate_action` | parsed action | `action_id`, `listing_id`, `ex_date`, `kind` (`split`, `bonus`, `consolidation`, `rights`, `demerger`, `dividend`, `buyback`, `other`), `ratio_new`, `ratio_old`, `cash_per_share`, `issue_price` (rights), `subject`, `parse_status` (`parsed`, `unparsed`), `source_file_id` |
-| `ref.price_adjustment` | ex-date that changed a listing's price basis | `adjustment_id` (rising identity), `listing_id`, `ex_date`, `factor` (multiplies prices before `ex_date`), `observed_factor`, `expected_factor`, `action_id` (null when nothing explains it), `status` (`applied`, `pending`, `rejected`), `auto`, `decided_by`, `applied_at`, `note` |
+| `ref.price_adjustment` | ex-date that changed a listing's price basis | `adjustment_id` (rising identity), `listing_id`, `ex_date`, `factor` (multiplies prices before `ex_date`), `observed_factor`, `expected_factor`, `close_before` (the previous traded close), `close_on` (the ex-date's close), `action_id` (null when nothing explains it), `status` (`applied`, `pending`, `rejected`), `auto`, `proposed_by`, `decided_by`, `decided_at`, `applied_at`, `note` |
 
 `factor` is what spec 0003 multiplies into every price before the ex-date. Volumes are divided by
 it.
@@ -250,7 +269,8 @@ The factor multiplies every price before the ex-date:
 | Consolidation | *F₂ / F₁* (above 1) |
 | Rights *a*:*b* at issue price *R* (face value plus premium) | *TERP / C*, where *C* is the close before the ex-date and *TERP = (b·C + a·R) / (a + b)* |
 | Demerger, capital reduction | From prices: the ex-date's first price divided by *C*. Always pending, so a person confirms |
-| Dividend, buyback, AGM, interest | No adjustment (Q3). Recorded only |
+| Extraordinary dividend: cash *D* on one ex-date with *D / C* ≥ 2% | *(C − D) / C* (Q3). Every dividend on the same ex-date is summed first |
+| Ordinary dividend (*D / C* below 2%), buyback, AGM, interest | No adjustment (Q3). Recorded only |
 
 Each session, for each listing that traded, the step checks the evidence:
 
@@ -262,6 +282,7 @@ Each session, for each listing that traded, the step checks the evidence:
 |---|---|
 | Split, bonus or consolidation on its ex-date, and `observed / factor` between 0.8 and 1.25 | Applied automatically |
 | Rights issue on its ex-date | Applied automatically with the TERP factor. A rights factor is close to 1, so no jump is expected |
+| Extraordinary dividend on its ex-date | Applied automatically. A 2% to 10% drop is inside normal moves, so the price can't confirm it; the parsed amount is the evidence |
 | Split, bonus or consolidation on its ex-date, but the price disagrees | Pending |
 | A jump near a clean ratio (1/2, 2/3, 1/5, 1/10 and so on) with an ISIN change, and no action | Pending. In history before NSE's announcements are complete, applied automatically and marked (Q5) |
 | Any other jump without an action | Pending (often a re-listing or a series move, and usually rejected) |
@@ -273,7 +294,9 @@ why a clean-ratio jump with an ISIN change still raises a review item.
 ### 7.4 Review
 
 What the rules can't decide waits in `ref.listing_change` or `ref.price_adjustment` with
-`status = pending`. Until a review page exists, a person reviews from the command line:
+`status = pending`. Arush reviews them after the nightly run (Q6) on the Observatory's review
+page, which is the first page built in the new Observatory. The same actions also exist as a
+command, for scripts and for use before the page is ready:
 
 ```
 uv run python -m cagr_data.reference.review list
@@ -313,6 +336,7 @@ The toolkit reads only what this section lists, as `cagr_read`. Anything else ma
 | Object | What it gives |
 |---|---|
 | `ref.listing` | one row per listing, with the columns in section 6.1 |
+| `ref.listing_current` | the stock master as of today: `listing_id`, `symbol`, `isin`, `name`, `asset_class`, `board`, `status`, `first_session`, `last_session`, one row per listing |
 | `ref.listing_symbol`, `ref.listing_isin` | dated symbols and ISINs |
 | `ref.listings_as_of(d date)` | a function returning `listing_id`, `symbol`, `isin`, `name`, `asset_class`, `board` for every listing that had traded by *d* and wasn't merged |
 | `ref.listing_by_symbol(symbol text, d date)` | the `listing_id` that had that symbol on *d*, or null |
@@ -329,7 +353,7 @@ Each task is one PR into main.
 | # | Task | Output |
 |---|---|---|
 | 0 | Probe: series in our data, ISIN and symbol changes, price jumps, the corporate-actions API (run from the laptop) | Done 27 Oct 2026: [`0002-source-check.md`](0002-source-check.md) |
-| 1 | Migration: `ref.listing*` tables, constraints, grants, the index rename seed, the ref checks | Tables in `cagr_test` |
+| 1 | Migration: `ref.listing*` tables, `ref.listing_current`, constraints, grants, the index rename seed, the ref checks | Tables in `cagr_test` |
 | 2 | Listing builder (rules 5.2 to 5.5), run over all history from `raw` | Every bhavcopy row since 2010 maps to a listing; the ref checks pass |
 | 3 | Corporate-actions feed, the ETF list feed, and the subject parser | `raw.nse_corporate_action` filled since 2010; parse rate reported |
 | 4 | Adjustment factors and matching (7.3) | `ref.price_adjustment` for all history; pending list reviewed with Arush |
@@ -348,9 +372,9 @@ Acceptance in `cagr_test`:
 
 | # | Question | Recommendation |
 |---|---|---|
-| Q1 | Is a listing the security (surviving symbol and ISIN changes) rather than the symbol? | Yes. It's what the toolkit expects, and it's the only key that survives renames |
-| Q2 | Which instruments get listings? | Main-board and SME equities, ETFs, REITs, InvITs and indices. No debt, no T0, no rights entitlements |
-| Q3 | Should dividends adjust prices? | No, not in this step. Adjust for capital changes only (splits, bonuses, consolidations, rights, demergers). Dividends are recorded, so a total-return series can come later |
-| Q4 | Should rights issues be adjusted with the theoretical ex-rights price (TERP)? | Yes. It's the standard method, it needs only the ratio and the issue price from the subject, and the change is small (GRASIM's 6:179 rights moved its factor by about 1%) |
-| Q5 | For history, should an unexplained jump that's a clean ratio (1/2, 1/5 and so on) apply without a person? | Yes, marked as automatic, if NSE's announcements don't reach back that far. Otherwise a person would review hundreds of old splits |
-| Q6 | Who reviews pending items, and how often? | Arush, from the command line, after the nightly run. The Observatory review page and Teams cards come with the classification spec |
+| Q1 | Is a listing the security (surviving symbol and ISIN changes) rather than the symbol? | **Agreed.** The listing follows the security as its symbol continues under a new name |
+| Q2 | Which instruments get listings? | **Agreed.** Main-board and SME equities, ETFs, REITs, InvITs and indices. No debt, no T0, no rights entitlements |
+| Q3 | Should dividends adjust prices? | **Decided:** ordinary dividends no, extraordinary dividends yes. A dividend of at least 2% of the previous close is adjusted, as Zerodha's Kite does. Splits, bonuses, consolidations, rights and demergers are all adjusted |
+| Q4 | Should rights issues be adjusted with the theoretical ex-rights price (TERP)? | **Agreed.** TERP |
+| Q5 | For history, should an unexplained jump that's a clean ratio (1/2, 1/5 and so on) apply without a person? | **Agreed.** Applied automatically and marked |
+| Q6 | Who reviews pending items, and how often? | **Decided:** Arush, after the nightly run, on a review page in the Observatory. The Observatory rebuild starts now, with this page first |

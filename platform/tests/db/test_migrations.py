@@ -19,7 +19,7 @@ def test_all_migrations_apply_then_rerun_is_a_no_op(
     url, platform_url, applied = migrated_db
     assert applied == [
         "0001_ops", "0002_ref_calendar", "0003_raw", "0004_seed_xnse", "0005_writer_maintain",
-        "0006_ohlc_t0",
+        "0006_ohlc_t0", "0007_ref_listings",
     ]  # fmt: skip
     with psycopg.connect(url) as conn:
         owner = conn.execute(
@@ -61,6 +61,8 @@ def test_expected_tables_exist(db: Conn) -> None:
         "raw.nse_cm_bar", "raw.nse_index_close", "raw.nse_holiday",
         "raw.nse_equity_list", "raw.nse_symbol_change",
         "raw.vendor_file_current", "raw.nse_cm_bar_current", "raw.nse_index_close_current",
+        "ref.listing", "ref.listing_change", "ref.listing_symbol", "ref.listing_isin",
+        "ref.index_alias", "ref.corporate_action", "ref.price_adjustment", "ref.listing_current",
     }  # fmt: skip
 
 
@@ -71,7 +73,7 @@ def test_no_extensions_needed(db: Conn) -> None:
 
 def test_seeds(db: Conn) -> None:
     assert db.execute("SELECT count(*) FROM raw.feed").fetchone() == (7,)
-    assert db.execute("SELECT count(*) FROM ops.dq_check").fetchone() == (12,)
+    assert db.execute("SELECT count(*) FROM ops.dq_check").fetchone() == (21,)
     venue = db.execute("SELECT time_zone, weekend_days FROM ref.venue").fetchall()
     assert venue == [("Asia/Kolkata", [6, 7])]
     bhavcopy = db.execute(
