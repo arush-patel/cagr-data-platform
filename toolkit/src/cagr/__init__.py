@@ -2,9 +2,9 @@
 
 Layers, lowest first; a lower layer never imports a higher one:
 
-- compute: `ind`, `metrics`, `calendar`, `splits` (pure functions, no I/O)
+- compute: `ind`, `metrics`, `calendar`, `splits`, `formula`, `dataset` (pure, no I/O)
 - definitions: `fs` (features and labels)
-- access: `db` (settings, read-only connections)
+- access: `db` (settings, read-only connections), `report` (Excel files)
 """
 
 __version__ = "0.1.0"

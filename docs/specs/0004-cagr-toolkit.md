@@ -1,305 +1,169 @@
-# Spec 0004: the `cagr` toolkit (definition)
+# Spec 0004: the `cagr` toolkit
 
 | | |
 |---|---|
-| Status | Draft; open questions answered by Arush on 27 Oct 2026 (section 10). The build is split into slices (section 9), each its own PR. |
-| Date | 2026-10-27 |
+| Status | Agreed 27 Oct 2026 (decisions in section 9). Built in slices, one PR each (section 8). |
 | Owner | Arush |
-| Component | `toolkit` (the Python package `cagr`), new, version 0.1.0 when its first slice lands |
-| Depends on | Reads what specs 0002 (reference data) and 0003 (clean bars) produce, and the lake export. The pure parts (section 9, slice T1) depend on nothing. |
-| Next | Slice T1 (section 9). |
+| Package | `toolkit/`, installed as `cagr-toolkit`, imported as `cagr` |
+| Depends on | Nothing for the pure parts. Reads come after specs 0002 (reference data) and 0003 (clean bars). |
 
-## 1. Goal
+## In one minute
 
-The shared Python library of the monorepo: the code more than one component needs. An
-indicator, a feature, a performance number like CAGR, a dataset, a split and a report mean the
-same thing in a notebook, in the nightly pipeline and in the Observatory, because all three
-import the same function.
+- The toolkit is **the shared Python library**. Any code that two parts of the repo need lives
+  here: indicators, CAGR and other metrics, features, datasets, splits, reports, and the
+  read-only database connection.
+- **Everyone imports it**: the lab (research), the platform (nightly jobs) and the Observatory
+  backend. They all call the same function, so they all get the same number.
+- **It never writes production data** and never talks to NSE. Those jobs stay in `platform`.
+- **It protects research from look-ahead.** Features can't read the future, and splits go by
+  time.
 
-When the toolkit is done, this is true:
+```python
+from cagr import metrics
 
-- A new feature idea goes from a function in a notebook to a logged decision tree in under an
-  hour, using every listing and every year, with no Excel file in between.
-- A feature is written once. The lab previews it, the platform computes it nightly, the
-  Observatory shows it, and all three get the same numbers because they run the same function.
-- An analytic is written once. The CAGR, XIRR or drawdown the Observatory shows for a run is
-  the one a notebook gets from the same trades, because both call `cagr.metrics`.
-- No dataset can see the future: features are joined as they were known on each date, the
-  universe is the one that existed on that date, and splits are by time with a gap.
-- Any result (a tree, a report, an Observatory run) can be rebuilt months later, because it
-  records the exact data snapshot, feature, label and toolkit versions it used.
+metrics.cagr(curve)  # the same number in a notebook and in the Observatory
+```
 
-## 2. What it is, and what it is not
+## 1. What goes in, what stays out
 
-The toolkit is the **library**: functions you import and call. The platform is the **jobs**
-that fetch, compute and store on a schedule. The lab is **where research happens**. The
-Observatory is **an app** that calls the library.
+The test: **if one notebook needs it, it stays in `lab/`. If two places need it, it goes in the
+toolkit.**
 
-Inside the toolkit there are three layers, and a lower layer never imports a higher one:
-
-| Layer | What | Side effects |
-|---|---|---|
-| **Compute** | Indicators, performance metrics, calendar arithmetic, splits, the formula engine. Pass in a DataFrame or a Series, get values back | None. No database, no files, no network. Safe to call from anywhere, including a request handler |
-| **Definitions** | The `@feature` and `@label` decorators, versions, warm-up, the no-future test | None |
-| **Access** | Database connections and settings, point-in-time reads, the lake, datasets, run tracking, reports | Reads Postgres and the lake; writes only the experimental lane, datasets and runs |
-
-So for "show CAGR in the Observatory", the backend loads the run's equity curve and calls
-`cagr.metrics.cagr(curve)`; a notebook does the same on the same curve and gets the same number.
-
-| Is | Is not |
+| In the toolkit | Not in the toolkit |
 |---|---|
-| Indicators (SMA, EMA, RSI, ATR, ADX, rolling highs and lows) as Polars expressions | The nightly engine that computes features for every listing and stores them (that is `platform`) |
-| Performance analytics: CAGR, XIRR, drawdown, volatility, Sharpe and Sortino, hit rate, turnover, hold time | The Observatory's strategy engine and portfolio simulator (they use these metrics but are app code) |
-| How to declare a feature or label (name, version, inputs, window, asset classes) | Code with writer or owner credentials. Pipelines and migrations stay in `platform` |
-| How to read bars, listings, calendars, universes, features and labels, point in time | A vendor client. It never talks to NSE or any other source |
-| Datasets, time-based splits, the no-future test | A model library. Trees and boosting come from scikit-learn, LightGBM and so on |
-| Database connections and settings for reading (one way to connect, one `.env` convention) | Something the TypeScript UI can import. The UI asks the Python API, which imports the toolkit |
-| Run tracking (MLflow) and the report frame (Run sheet first, saved with the run) | A dumping ground. See the rule below |
-| The `cagr` command line: `lake sync`, `preview`, `register`, `promote` | A place for research code. Notebooks, experiments and feature ideas live in `lab/` |
+| Indicators: SMA, EMA, RSI, ATR, ADX, rolling highs and lows | The nightly job that computes features for every stock (`platform`) |
+| Metrics: CAGR, XIRR, drawdown, volatility, Sharpe, Sortino, hit rate | The Observatory's strategy engine and simulator (app code) |
+| How to declare a feature or a label | Pipelines, migrations, anything that writes production data (`platform`) |
+| Point-in-time reads of bars, listings and features | Code that fetches from NSE or any other source |
+| Datasets, time-based splits, the no-future check | Models. Trees come from scikit-learn or LightGBM |
+| The analysts' formula language | Anything the TypeScript UI imports. The UI calls the Python API |
+| Run tracking (MLflow) and Excel reports | Notebooks and experiments (`lab/`) |
 
-The rule that keeps it small: **if only one notebook needs it, it belongs in `lab/`; if two
-consumers need the same answer, it belongs in the toolkit.**
+## 2. Who uses it
 
-## 3. Who uses it
+| Who | Uses it to |
+|---|---|
+| Arush | Write features and labels in `lab/`, build datasets, train trees, write reports |
+| Coworker | Build the Observatory backend on it, and do research in `lab/` |
+| Platform | Compute the same `@feature` functions nightly |
+| Analysts | Nothing directly. The formulas they type in the Observatory run through `cagr.formula` |
+| New researchers | `uv sync` and start, without database credentials |
 
-| Who | What they do with it | What they never do |
-|---|---|---|
-| **Arush (researcher)** | Writes features and label drafts in `lab/`, builds datasets, trains trees, writes reports, promotes features | Read Postgres or the raw files directly from a notebook |
-| **Coworker** | Builds the Observatory's Python API and backtest worker on the toolkit: reads features and snapshots through it, and computes every analytic it shows with `cagr.metrics`. Also does research in `lab/`, like Arush | Recompute a feature or a metric inside the app |
-| **The platform itself** | The feature engine imports the same `@feature` functions to compute them nightly; parity tests compare production with the experimental values | Define a feature its own way |
-| **Analysts** | Nothing directly. Their formulas typed in the Observatory are parsed by the toolkit's formula engine, so a formula means the same in the chart and in the lab | Install Python or clone the repo |
-| **Future researchers** | `uv sync`, `cagr lake sync`, first dataset in minutes | Need database credentials to start |
-| **Execution (later, team lead's Node service)** | Not a user. It reads strategy versions and served values as data | Import Python |
-
-## 4. Where it lives in the monorepo
+## 3. Where it sits
 
 ```
 cagr-data-platform/
-├── platform/        # cagr-data (import cagr_data): feeds, reference, clean, feature engine, Dagster
-├── toolkit/         # cagr-toolkit (import cagr): this spec
-│   ├── src/cagr/
-│   └── tests/
-├── lab/             # research: features/, labels/, datasets/, notebooks/, models/, reports/
-├── observatory/     # later: api/, worker/ (Python, imports cagr), web/ (TypeScript/React)
-├── db/migrations/
+├── platform/      nightly jobs (import cagr_data)
+├── toolkit/       this library (import cagr)
+├── lab/           research: features/, labels/, notebooks/, reports/
+├── observatory/   later: Python API and worker, React UI
 └── docs/specs/
 ```
 
-### Which way the dependencies point
+Dependencies point one way: **lab, observatory and platform import `cagr`. `cagr` imports none
+of them.** A test enforces this.
 
-```
-lab ──────────┐
-observatory ──┼──▶ cagr (toolkit) ──▶ polars, duckdb, psycopg, mlflow
-platform ─────┘
-```
+The library is a separate package inside the one repo, so that:
 
-- The toolkit depends on **nothing else in the repo**. It knows the platform only through
-  contracts: the Postgres schemas (`ref`, `clean`, `fb`, ...) and the lake's folder layout.
-- `platform` depends on the toolkit (for indicators, the `@feature` protocol, the point-in-time
-  rules and the connection helpers), never the other way round. So installing the toolkit for research does not pull in Dagster,
-  httpx or the NSE parsers.
-- `lab` and `observatory` never import `cagr_data`. CI enforces this with an import check.
+- a research install stays light (no Dagster, no NSE parsers)
+- each run can record which toolkit version made it
+- the Observatory can rely on stable functions. A change to what one returns gets a version bump.
 
-### Why a separate package now that it is one repo
+## 4. The modules
 
-The three-repo design made the toolkit the only shared code, released by tag so the lab could pin
-it. In one repo the pin is not needed: `lab/` always uses the toolkit at the same commit, and CI
-runs the lab's quick tests on every toolkit change. What stays:
+Three layers. A lower layer never imports a higher one.
 
-- A separate package keeps research installs light and the dependency direction honest.
-- A version number per component (decision of 26 Oct): every run records `cagr` version and git
-  commit, so "which toolkit made this?" always has an answer.
-- Research churn is kept away from shipped code by ownership, not by repos: `lab/` commits never
-  change `platform/`, `toolkit/` or `observatory/`. A CODEOWNERS file asks for review where code
-  ships. Since both of you do research, `lab/` gets one folder per person plus a shared folder,
-  and the shared folder needs a review like shipped code does.
-- Because the Observatory builds on it from the start, the toolkit's public functions need to stay
-  stable early: a change to what one returns is a version bump with a changelog line (section 7).
+| Layer | Module | What it does | Status |
+|---|---|---|---|
+| Compute (pure, no I/O) | `cagr.ind` | Indicators as Polars expressions | Built |
+| | `cagr.metrics` | CAGR, XIRR, drawdown, Sharpe and the rest | Built |
+| | `cagr.calendar` | Shift by n sessions, count sessions between dates | Built |
+| | `cagr.splits` | Walk-forward, expanding and holdout splits with a gap | Built |
+| | `cagr.formula` | Analysts' formulas, such as `close / rolling_max(high, 20) - 1` | Built |
+| | `cagr.dataset` | Joins features and labels onto rows, point in time | Built (on frames) |
+| Definitions | `cagr.fs` | `@feature` and `@label`, warm-up, the no-future check | Built |
+| Access | `cagr.db` | Read-only Postgres connection (`cagr_read`) | Built |
+| | `cagr.report` | Excel workbook with a Run sheet first | Built |
+| | `cagr.data`, `cagr.lake` | Read bars, listings and features from the lake or Postgres | Waits for clean bars |
+| | `cagr.track` | MLflow run logging | Later |
+| | `cagr` command | `lake sync`, `preview`, `register`, `promote` | Later |
 
-### Connections: what stays in `platform`
+The connections that write (`cagr_platform` for migrations, `cagr_writer` for Dagster) stay in
+`platform`.
 
-`platform` opens only two kinds of connection: the owner (`cagr_platform`, `CAGR_DATABASE_URL`)
-for migrations, and the pipeline writer (`cagr_writer`, `CAGR_PIPELINE_DATABASE_URL`) for
-Dagster. Both write, so both stay in `platform/src/cagr_data/core/db.py`. The toolkit's
-`cagr.db` is the read-only side (`cagr_read`, `CAGR_READ_DATABASE_URL`) and is new code, not a
-move: there was no read-only connection in `platform` to move. `platform` starts importing the
-toolkit when its feature engine runs `cagr.fs` features on `cagr.ind` indicators.
+## 5. What using it looks like
 
-## 5. What is in it
-
-Modules by layer. Names are proposals.
-
-**Compute** (pure functions, no I/O)
-
-| Module | What it does | Replaces today |
-|---|---|---|
-| `cagr.ind` | Textbook indicators on one listing's bars, as Polars expressions: SMA, EMA, RSI, ATR and ATR %, ADX and DI, rolling highs and lows, volume averages, returns over n sessions | The JS feature bank, the Python port for `aif_base`, the app's own copies |
-| `cagr.metrics` | Performance analytics from trades, cash flows or an equity curve: CAGR, XIRR, total return, max drawdown and its duration, volatility, Sharpe, Sortino, hit rate, average win and loss, turnover, hold time. Each takes a DataFrame or Series and returns a number or a small frame | CAGR and XIRR computed in the Observatory's JS, Excel formulas in reports |
-| `cagr.calendar` | Session arithmetic on a calendar you pass in: shift by n sessions, sessions between two dates, last session on or before a date | Weekday arithmetic in notebooks |
-| `cagr.splits` | `walk_forward`, `expanding`, `holdout_by_date`, each with a gap in sessions; refuses a random split unless asked; counts variants tried per question | The every-5th-row split |
-| `cagr.formula` | Parses analysts' formulas (`close / rolling_max(high, 20) - 1`) into the same Polars expressions features use; can only look back | Nothing; new |
-
-**Definitions**
-
-| Module | What it does | Replaces today |
-|---|---|---|
-| `cagr.fs` | `@fs.feature` and `@fs.label` decorators; warm-up blanks; the truncation (no-future) test; `preview` (a few listings, nothing stored); `register` (experimental lane: every listing, stored as `name@v`) | The JS feature bank and its Python port |
-
-**Access**
-
-| Module | What it does | Replaces today |
-|---|---|---|
-| `cagr.db` | Settings from `CAGR_*` variables or `.env`; a read-only Postgres connection; Polars frames from a query | Each repo's own connection code |
-| `cagr.data` | Point-in-time reads: bars (adjusted or raw), listings, classifications, universe membership, as of any date. Lake first, Postgres when the lake does not have it | `read_excel` on the feature bank; SQL through the tunnel |
-| `cagr.lake` | Where the lake is (`CAGR_LAKE_ROOT`: a laptop folder now, Azure Blob later), local sync of the parts you use | 13 to 17 MB Excel exports |
-| `cagr.dataset` | `dataset(features, labels, universe, start, end)` on (listing, date) rows, and `dataset(events=..., at=...)` on event rows such as goldens; cached by recipe hash | `golden_*_dataset.mjs`, the coloured header cells used to pick feature columns |
-| `cagr.track` | MLflow: logs a run with its dataset snapshot, versions, split, parameters, metrics and files. A local file store on the laptop now, a server on the VM later | Workbooks in `runs/analysis` and `.prev` copies |
-| `cagr.report` | `report.workbook(...)`: Run sheet first, your sheets after, saved with the run; SharePoint and Teams later | Hand-built openpyxl code in every notebook |
-| `cagr` CLI | `cagr lake sync`, `cagr preview`, `cagr register`, `cagr promote name@v` | Nothing; new |
-
-### What a feature looks like
-
-Polars, because the platform is Polars throughout (D10). A feature is a function that returns a
-Polars expression over one listing's bars; the toolkit runs it per listing, so it cannot
-accidentally mix stocks. Cross-sectional features (ranks within an industry) declare
-`scope="cross_section"` and receive one date's rows instead.
-
-Features are built from `cagr.ind` and from each other.
+A feature is a function that returns a Polars expression over one stock's bars:
 
 ```python
-# lab/features/breakout.py
-import polars as pl
 from cagr import fs, ind
 
 
-@fs.feature(
-    name="range_contraction",
-    version=1,
-    inputs=["high", "low"],
-    asset_classes=["equity", "index"],
-    min_bars=25,
-)
-def range_contraction() -> pl.Expr:
-    rng = lambda n: ind.rolling_high(n) - ind.rolling_low(n)
-    return rng(5) / rng(20).shift(5)  # last 5 sessions' range / the 20 before them
+@fs.feature(name="range_contraction", version=1, inputs=["high", "low"], min_bars=25)
+def range_contraction():
+    rng5 = ind.rolling_high(5) - ind.rolling_low(5)
+    rng20 = ind.rolling_high(20) - ind.rolling_low(20)
+    return rng5 / rng20.shift(5)
 ```
 
-### What an analytic looks like
+A dataset of goldens, with values as of the day before each one starts, split by time:
 
 ```python
-# observatory/api: one run's numbers for the Portfolio tab
-from cagr import metrics
+from cagr import dataset, splits
 
-curve = load_equity_curve(run_id)  # a Polars frame: date, equity
-flows = load_cash_flows(run_id)  # date, amount
-summary = {
-    "cagr": metrics.cagr(curve),
-    "xirr": metrics.xirr(flows),
-    "max_drawdown": metrics.max_drawdown(curve),
-}
+rows = dataset.event_rows(goldens, calendar, at="T-1")
+ds = dataset.build(rows, features={"range_contraction@1": values})
+for split in splits.walk_forward(ds.frame, train_years=4, test_months=6, gap_sessions=20):
+    ...
 ```
 
-The same three calls in a notebook on the same run give the same three numbers.
+A report:
 
 ```python
-# in a notebook
-from cagr import fs, dataset, splits, track
+from cagr import report
 
-fs.preview(range_contraction, listings=["RELIANCE", "TCS"], start="2024-01-01")  # seconds, plotted
-fs.register(range_contraction)  # every listing, stored as range_contraction@1
-
-ds = dataset(
-    events="golden_a@11",
-    at="T-1",  # one row per golden, values as of the day before
-    features=["range_contraction@1", "atr14_pct@2"],
-    universe="xnse_liquid",
-)
-for train, test in splits.walk_forward(ds, train_years=4, test_months=6, gap_sessions=20):
-    with track.run("C1 trees", dataset=ds) as run:
-        ...  # scikit-learn as today; ds.to_pandas() when needed
+with report.workbook("reports/contraction.xlsx", "Contraction by industry") as wb:
+    wb.sheet("By industry", table)
 ```
 
-### Rules the toolkit enforces
+## 6. Rules it enforces
 
-1. **No future data.** `register` recomputes a feature on history cut at random dates and
-   compares with the full run; any difference fails. The same test runs in CI on promotion.
-2. **Warm-up is blank.** A value appears only once `min_bars` bars exist.
-3. **Labels are marked.** Anything declared with `@fs.label` carries `uses_future=True`. A
-   dataset may put labels in its target columns only; the platform refuses to let a feature,
-   signal or strategy version read one.
-4. **Versions are immutable.** Changing a feature's code or parameters means a new version.
-   `register` refuses to overwrite `name@v` with different code (it hashes the function source).
-5. **Point in time.** Every read takes an as-of date. Listings, classifications and universes
-   are the ones that existed then, so delisted stocks are in the backtest and today's industry
-   is not applied to 2015.
-6. **Splits are by time.** A random split on a time series raises unless `allow_random=True`
-   is passed, and the run log says so.
+1. **No future data.** A feature is recomputed on history cut at random dates. Any difference
+   from the full run fails.
+2. **Warm-up is blank.** No value until `min_bars` bars exist.
+3. **Labels are marked.** A label can only be a target, never a feature.
+4. **Versions don't change.** New code or parameters mean a new version.
+5. **Point in time.** Every read takes an as-of date, so delisted stocks stay in and today's
+   industry is not applied to 2015.
+6. **Splits go by time.** A random split raises unless you ask for it.
 
-## 6. What it reads and writes
+## 7. How we know it works
 
-| | Where | Owner |
+- Unit tests on small made-up data for every module, with hand-worked values.
+- Property tests, such as "drawdown is never positive".
+- A leaky feature (one that reads tomorrow) must be rejected.
+- The real check: port two of today's notebooks and compare their trees with today's.
+- Speed: five features over every stock since 2015 load in under 2 seconds on the laptop.
+
+## 8. Build slices
+
+| Slice | What | Status |
 |---|---|---|
-| Reads bars, listings, calendars, universes | Lake (`bars/`, `ref/`) and Postgres `clean`, `ref` | Platform writes them (specs 0002, 0003, lake export) |
-| Reads production features and labels | Lake `features/`, `labels/`; Postgres for one-stock or one-date lookups | Platform |
-| Writes experimental features and label drafts | Lake `features/<name>/v<n>/` (immutable), a row in `fb.feature_def` with lane `experimental` | Toolkit, on `register` |
-| Writes datasets | Lake `datasets/<recipe-hash>.parquet` | Toolkit |
-| Writes runs and reports | Lake `runs/<run-id>/`, plus the tracking store | Toolkit |
-| Never writes | `raw`, `ref`, `clean`, production features | |
+| T1 | Package, `db`, `ind`, `metrics`, `calendar`, `splits`, `fs` | Done |
+| T1b | `formula`, `dataset` (on frames), `report` | This PR |
+| T2 | `data` and `lake` reads, `fs.preview`, `cagr lake sync` | After specs 0002 and 0003 |
+| T3 | `fs.register` (experimental features), datasets read from the lake | After T2 |
+| T4 | `track` (MLflow), port the two notebooks | After T3 |
+| T5 | `cagr promote`, the Observatory read layer | With the production feature lane |
 
-The toolkit uses the read-only role (`cagr_read`) for Postgres. Writing the experimental lane's
-registry rows needs a narrow research role; that role is designed with the `fb` migrations, not
-here.
+## 9. Decisions (Arush, 27 Oct 2026)
 
-## 7. Versioning and releases
-
-- `toolkit/pyproject.toml` carries the version; `0.x` until the feature store's contracts settle.
-- A release is a tag `toolkit-v0.3.0` on main. The changelog says what changed for researchers.
-- A breaking change to what a function returns is a major (or, before 1.0, minor) bump with a
-  note in the changelog. Feature and label versions are separate from the toolkit's version.
-- Every run, dataset and report records the toolkit version and the git commit.
-
-## 8. How we will know it works
-
-- **Unit tests** for every indicator, metric, the calendar, splits, the truncation test and the
-  formula parser, on small synthetic data (no database). Indicators and metrics are checked
-  against hand-worked values, and property tests (hypothesis) check things like "drawdown is
-  never positive" and "CAGR of a flat curve is zero".
-- **A leak test that must fail**: a feature that uses `shift(-1)` is rejected by `register`.
-- **A parity test**: one feature computed through `fs.preview`, through `register` and by the
-  platform's engine gives identical values.
-- **The real check**: port two of today's notebooks (`dt_15_variables` and `dt_c1_trees`) onto the
-  toolkit and compare their trees and scores with today's, once with the old every-5th split and
-  once with a walk-forward split. The difference is the leak today's split hides.
-- **Speed**: five features across every listing since 2015 load in under 2 seconds on the laptop.
-
-## 9. Build slices
-
-The toolkit can't read what does not exist yet, so most of it waits for clean bars. The parts that
-need no data can start now.
-
-| Slice | What | Needs | Can start |
-|---|---|---|---|
-| **T1** | Package skeleton in the uv workspace; `cagr.db` (read-only connections); `cagr.ind` and `cagr.metrics` with their tests; `cagr.calendar`; `cagr.splits`; the `@fs.feature` decorator, warm-up and the truncation test on synthetic bars; CI import rule | Nothing beyond spec 0001 | Now |
-| **T2** | `cagr.data` and `cagr.lake` over clean bars and listings; `fs.preview`; `cagr lake sync` | Specs 0002 and 0003, the lake export of bars | After 0003 |
-| **T3** | `fs.register` (experimental lane), `cagr.dataset` on (listing, date) and event rows | The `fb` registry migration; the first few features | After T2 |
-| **T4** | `cagr.track` (MLflow) and `cagr.report`; port the two notebooks | Nothing new | After T3 |
-| **T5** | `cagr.formula`, `cagr promote`, the Observatory read layer | The feature engine in the platform; the Observatory backend starts | With the production lane |
-
-## 10. Decisions (Arush, 27 Oct 2026)
-
-1. **The Observatory backend reads through the toolkit**, not through a Feature API. A Feature
-   API is built only if a non-Python consumer (execution) needs one.
-2. **Features are Polars expressions.** Datasets hand over to pandas with one call for
-   scikit-learn.
-3. **MLflow** for experiment tracking: a local file store on the laptop now, a server later.
-4. **Goldens are the main unit of research for now.** `dataset(events=..., at=...)` is a
-   first-class shape beside (listing, date) rows, so another event type can replace goldens later.
-5. **The coworker does research too.** Hence per-person and shared folders in `lab/`, and an
-   early-stable public API (section 4).
-6. **SharePoint and Teams delivery comes later.** Reports save with the run and into the synced
-   OneDrive folder first.
-7. **Label drafts live in `lab/labels/`** as `@fs.label` functions, promoted into the platform
-   once stable.
-8. **The toolkit is the shared library**, not only the research read side: indicators,
-   performance metrics and connection helpers live in it too, so the Observatory and the lab
-   call the same functions (section 2).
+1. The Observatory backend reads through the toolkit. There is no separate Feature API.
+2. Features are Polars. Datasets convert to pandas in one call for scikit-learn.
+3. MLflow for tracking: local files now, a server later.
+4. Goldens are the main research unit for now. Event rows sit beside (stock, date) rows, so
+   another event type can replace goldens later.
+5. The coworker does research too. `lab/` gets a folder per person plus a shared one.
+6. SharePoint and Teams delivery comes later.
+7. Label drafts live in `lab/labels/`.
+8. The toolkit is the shared library for everything, not only research reads.

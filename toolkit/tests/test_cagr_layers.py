@@ -6,7 +6,7 @@ from pathlib import Path
 import cagr
 
 SRC = Path(cagr.__file__).parent
-COMPUTE = {"ind", "metrics", "calendar", "splits", "fs"}
+COMPUTE = {"ind", "metrics", "calendar", "splits", "formula", "dataset", "fs"}
 
 
 def imports(path: Path) -> set[str]:
@@ -27,7 +27,9 @@ def test_the_toolkit_never_imports_the_platform() -> None:
 def test_compute_and_definitions_do_no_io() -> None:
     for name in COMPUTE:
         found = imports(SRC / f"{name}.py")
-        assert not found & {"psycopg", "cagr.db", "httpx", "duckdb"}, name
+        assert not found & {"psycopg", "cagr.db", "cagr.report", "xlsxwriter", "httpx", "duckdb"}, (
+            name
+        )
 
 
 def test_version() -> None:
