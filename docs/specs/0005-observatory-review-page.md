@@ -110,6 +110,11 @@ When this step is done:
 The database still enforces `decided_by <> proposed_by`. If the API refuses, the page says why in
 plain words. Items the rules proposed carry `proposed_by = 'rules'`.
 
+The page reads the evidence spec 0002 already stores, and recomputes nothing: `observed_factor`,
+`expected_factor`, `close_before` and `close_on` on adjustments, the action's `subject`, and the
+`evidence` keys on listing changes (`rule`, `session`, `file_ids`, `row`, `previous`,
+`symbolchange`, `candidates`; spec 0002, section 6.1).
+
 History lists decided items, newest first, filterable by kind and reviewer. Undo is a merge's
 reverse change row only. A wrong applied factor is corrected the spec 0002 way: reject it, and a
 new row with a higher id replaces it.
@@ -206,7 +211,7 @@ Each slice is one PR into main.
 |---|---|---|
 | O1 | Skeleton: `observatory/api` with `/api/health`, `observatory/web` with the app shell and an empty Review page, CI job for the web app | Nothing |
 | O2 | Read side: queue and item APIs, the queue and item views, the chart | Spec 0002 migration 0007 (built meanwhile against fixtures with the same tables) |
-| O3 | Decisions: `cagr_reviewer` migration, approve, reject, merge, History | The review module from spec 0002 task 5 |
+| O3 | Decisions: migration 0008 (`cagr_reviewer`, after 0002's 0007), approve, reject, merge, History | The review module from spec 0002 task 5 |
 | O4 | Acceptance on the real pending list with Arush; docs page `docs/observatory/` | 0002 task 4 |
 
 ## 9. Open questions
