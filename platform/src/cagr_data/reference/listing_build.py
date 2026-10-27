@@ -1,5 +1,5 @@
-"""Build ref.listing* from raw, one session at a time (spec 0002, section 5), and run the
-ref-layer checks (section 8).
+"""Build ref.listing* from raw, one session at a time (spec 0002, section 5), then
+ref.corporate_action (section 7.2), and run the ref-layer checks (section 8).
 
     uv run python -m cagr_data.reference.listing_build [--through 2026-10-26]
 
@@ -24,6 +24,7 @@ from cagr_data.core.db import Connection, connect
 from cagr_data.core.settings import Settings
 from cagr_data.quality import runner
 from cagr_data.quality.checks import SAMPLE, Outcome
+from cagr_data.reference.corporate_actions import build_actions, corporate_action_parsed
 from cagr_data.reference.listings import (
     FIRST_ISIN_DATE,
     LISTING_SERIES,
@@ -221,16 +222,41 @@ def _save_sessions(conn: Connection, book: Book) -> None:
 
 
 def _master_symbols(conn: Connection) -> set[str]:
-    """Symbols in the latest main-board and SME equity masters."""
+    """Symbols in the latest main-board, SME and ETF masters."""
     rows = conn.execute(
-        """
-        SELECT e.symbol FROM raw.nse_equity_list e
-         WHERE e.file_id IN (SELECT DISTINCT ON (dataset) file_id FROM raw.vendor_file_current
-                              WHERE dataset IN ('nse_equity_list', 'nse_sme_equity_list')
-                              ORDER BY dataset, partition_date DESC)
+        f"""
+        WITH latest AS ({_LATEST_MASTERS})
+        SELECT symbol FROM raw.nse_equity_list WHERE file_id IN (SELECT file_id FROM latest)
+        UNION
+        SELECT symbol FROM raw.nse_etf_list WHERE file_id IN (SELECT file_id FROM latest)
         """
     ).fetchall()
     return {r[0] for r in rows}
+
+
+_LATEST_MASTERS = """
+    SELECT DISTINCT ON (dataset) file_id, partition_date FROM raw.vendor_file_current
+     WHERE dataset IN ('nse_equity_list', 'nse_sme_equity_list', 'nse_etf_list')
+     ORDER BY dataset, partition_date DESC
+"""
+
+
+def _reclassify_etfs(conn: Connection) -> int:
+    """Equity listings that are ETFs: an INF ISIN, or a symbol in the ETF list. ETFs that
+    traded before ISINs were in the bhavcopy start out as equity."""
+    done = conn.execute(
+        f"""
+        UPDATE ref.listing l SET asset_class = 'etf'
+         WHERE l.asset_class = 'equity' AND l.board = 'main'
+           AND (EXISTS (SELECT 1 FROM ref.listing_isin i
+                         WHERE i.listing_id = l.listing_id AND i.isin LIKE 'INF%%')
+                OR EXISTS (SELECT 1 FROM ref.listing_isin i JOIN raw.nse_etf_list e
+                             ON e.isin = i.isin
+                          WHERE i.listing_id = l.listing_id
+                            AND e.file_id IN (SELECT file_id FROM ({_LATEST_MASTERS}) m)))
+        """
+    )
+    return done.rowcount
 
 
 @dataclass
@@ -293,6 +319,7 @@ def build(conn: Connection, through: date, commit: Callable[[], None] | None = N
     if result.last is not None:
         book.refresh_status(index_of[result.last], _master_symbols(conn))
         _save_sessions(conn, book)
+        _reclassify_etfs(conn)
         commit()
     return result
 
@@ -388,7 +415,40 @@ def run_checks(
         (VENUE, max_sessions),
     ).fetchall()
     out.append(_outcome("review_waiting", waiting, "pending items waiting too long"))
+    out.append(_master_coverage(conn, end))
+    out.append(corporate_action_parsed(conn, end))
     return out
+
+
+def _master_coverage(conn: Connection, end: date) -> Outcome:
+    """Every symbol in the latest masters has a listing, and every equity or ETF listing that
+    traded on `end` is in a master. Skipped when the masters are older than `end` by more than
+    5 days: history before the first snapshot can't be compared with today's lists."""
+    latest = conn.execute(f"SELECT min(partition_date) FROM ({_LATEST_MASTERS}) m").fetchone()
+    if latest is None or latest[0] is None or abs((latest[0] - end).days) > 5:
+        return Outcome(
+            "master_coverage", True, {"skipped": True}, "no master snapshot near this date"
+        )
+    masters = _master_symbols(conn)
+    held = {
+        r[0]
+        for r in conn.execute(
+            "SELECT s.symbol FROM ref.listing_symbol s JOIN ref.listing l USING (listing_id)"
+            " WHERE s.valid_to IS NULL AND l.asset_class <> 'index' AND l.status <> 'merged'"
+        ).fetchall()
+    }
+    traded = {
+        r[0]
+        for r in conn.execute(
+            "SELECT s.symbol FROM ref.listing l JOIN ref.listing_symbol s USING (listing_id)"
+            " WHERE l.last_session = %s AND l.asset_class IN ('equity', 'etf')"
+            " AND s.valid_to IS NULL",
+            (end,),
+        ).fetchall()
+    }
+    rows = [("no listing", s) for s in sorted(masters - held)]
+    rows += [("in no master", s) for s in sorted(traded - masters)]
+    return _outcome("master_coverage", rows, "symbols the masters and listings disagree on")
 
 
 def check(conn: Connection, run_id: int, start: date, end: date) -> list[Outcome]:
@@ -413,6 +473,8 @@ def main(argv: list[str] | None = None) -> int:
         conn.commit()
         try:
             result = build(conn, args.through)
+            actions = build_actions(conn)
+            conn.commit()
         except MissingSessionError as e:
             runs.finish_run(conn, run_id, succeeded=False)
             conn.commit()
@@ -426,7 +488,9 @@ def main(argv: list[str] | None = None) -> int:
     print(
         f"{result.sessions} sessions ({result.first} to {result.last}):"
         f" {result.new_listings} new listings, {result.symbol_changes} symbol changes,"
-        f" {result.isin_changes} ISIN changes, {result.review_items} review items"
+        f" {result.isin_changes} ISIN changes, {result.review_items} review items;"
+        f" {actions.actions} corporate actions ({actions.unparsed} unparsed,"
+        f" {len(actions.unmapped)} response rows with no listing)"
     )
     for o in failed:
         print(f"critical: {o.check_id}: {o.detail}", file=sys.stderr)

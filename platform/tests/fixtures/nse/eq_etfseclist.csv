@@ -1,0 +1,4 @@
+Symbol,Underlying Asset,SecurityName,DateofListing,MarketLot,ISINNumber,FaceValue,ETF Underlying,Underlying Key
+NIFTYBEES,Nifty 50,NIPINDETFNIFTYBEES,08-Jan-02,1,INF204KB14I2,1,EQUITY,Nifty 50
+JUNIORBEES,Nippon India ETF Nifty Next 50 Junior BeES,NIP IND ETF JUNIOR BEES,06-Mar-03,1,INF732E01045,1.25,EQUITY,Nifty Next 50
+LIQUIDBEES,Government Securities,NIPINDETFLIQUIDBEES,16-Jul-03,1,INF732E01037,1000,DEBT,Overnight ETFs and Liquid ETF

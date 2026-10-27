@@ -10,9 +10,10 @@ import polars as pl
 
 from cagr_data.core.db import Connection
 from cagr_data.vendors.nse.bhavcopy import parse_bhavcopy
+from cagr_data.vendors.nse.corporate_actions import parse_response
 from cagr_data.vendors.nse.holidays import parse_holidays
 from cagr_data.vendors.nse.index_close import parse_index_close
-from cagr_data.vendors.nse.listings import parse_equity_list, parse_symbol_change
+from cagr_data.vendors.nse.listings import parse_equity_list, parse_etf_list, parse_symbol_change
 
 
 @dataclass(frozen=True)
@@ -43,7 +44,15 @@ FORMATS: dict[str, FormatSpec] = {
         "raw.nse_equity_list", lambda b, d: parse_equity_list(b, "sme", d)
     ),
     "symbolchange_v1": FormatSpec("raw.nse_symbol_change", parse_symbol_change),
+    "etf_list_v1": FormatSpec("raw.nse_etf_list", parse_etf_list),
+    "corporate_actions_v1": FormatSpec(
+        "raw.nse_corporate_action", lambda b, d: parse_response(b, "main")
+    ),
+    "sme_corporate_actions_v1": FormatSpec(
+        "raw.nse_corporate_action", lambda b, d: parse_response(b, "sme")
+    ),
 }
+YEARLY_API_FORMATS = frozenset({"corporate_actions_v1", "sme_corporate_actions_v1"})
 
 
 def load_feed(conn: Connection, feed_id: str) -> Feed:
@@ -66,6 +75,8 @@ def stored_name(feed: Feed, day: date, url: str) -> str:
     """
     if feed.format == "holiday_master_v1":
         return f"holiday-master_trading_{day:%Y}.json"
+    if feed.format in YEARLY_API_FORMATS:
+        return f"{feed.feed_id}_{day:%Y}.json"
     name = urlsplit(url).path.rsplit("/", 1)[-1]
     if feed.cadence == "daily":
         stem, dot, rest = name.partition(".")
