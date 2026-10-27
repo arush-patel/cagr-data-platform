@@ -9,6 +9,9 @@ Format facts, from the source check (docs/specs/0001-source-check.md):
   header ends with a comma; from 21 Jun 2024 they are Rsvd1..Rsvd4.
 - Legacy (2010 to 5 Jul 2024): no TOTALTRADES or ISIN columns until 21 Jun 2011. Every line
   ends with a comma. Dates look like 05-JUL-2024, or 4-JAN-2010 in 2010.
+- An instrument without an ISIN of its own (the partly-paid E1 series of a rights issue, Feb 2021)
+  can carry the placeholder DUMMY. Anything that is not an ISIN is read as missing; the stored
+  file keeps what NSE sent.
 """
 
 import io
@@ -25,6 +28,7 @@ Format = Literal["udiff_v1", "legacy_v1"]
 
 PRICE = pl.Decimal(18, 4)
 VALUE = pl.Decimal(22, 2)
+ISIN = r"^[A-Z]{2}[A-Z0-9]{9}[0-9]$"  # as raw.nse_cm_bar checks it
 
 BAR_SCHEMA: dict[str, pl.DataType] = {
     "trade_date": pl.Date(),
@@ -88,6 +92,11 @@ def _check_date(frame: pl.DataFrame, expected: date | None) -> None:
         raise FileShapeError("rows without a trade date")
 
 
+def _isin(name: str) -> pl.Expr:
+    value = text(name)
+    return pl.when(value.str.contains(ISIN)).then(value).otherwise(None)
+
+
 def parse_udiff(csv: bytes, expected_date: date | None = None) -> pl.DataFrame:
     names = [_UDIFF_OLD_RESERVED.get(n, n) for n in header(csv)]
     if tuple(names) != UDIFF_COLUMNS:
@@ -97,7 +106,7 @@ def parse_udiff(csv: bytes, expected_date: date | None = None) -> pl.DataFrame:
         trade_date=text("TradDt").str.strptime(pl.Date, "%Y-%m-%d", strict=False),
         symbol=text("TckrSymb"),
         series=text("SctySrs").fill_null(""),
-        isin=text("ISIN"),
+        isin=_isin("ISIN"),
         instrument_type=text("FinInstrmTp"),
         open=text("OpnPric"),
         high=text("HghPric"),
@@ -125,7 +134,7 @@ def parse_legacy(csv: bytes, expected_date: date | None = None) -> pl.DataFrame:
         trade_date=text("TIMESTAMP").str.strptime(pl.Date, "%d-%b-%Y", strict=False),
         symbol=text("SYMBOL"),
         series=text("SERIES").fill_null(""),
-        isin=text("ISIN") if has_isin else pl.lit(None, pl.String),
+        isin=_isin("ISIN") if has_isin else pl.lit(None, pl.String),
         instrument_type=pl.lit(None, pl.String),
         open=text("OPEN"),
         high=text("HIGH"),
