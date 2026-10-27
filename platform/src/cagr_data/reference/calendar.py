@@ -221,3 +221,34 @@ def refresh_calendar(conn: psycopg.Connection[Any], venue_id: str, end: date) ->
                  d.is_month_end)
             )  # fmt: skip
     return sum(d.is_session for d in days)
+
+
+def record_archive_proof(
+    conn: psycopg.Connection[Any], venue_id: str, dataset: str, before: date
+) -> int:
+    """Record the exceptions the archive proves for days before `before` (the first year with a
+    holiday list): which days had a file of the dataset and which had only 404s. Returns how
+    many were new."""
+    venue = conn.execute(
+        "SELECT weekend_days FROM ref.venue WHERE venue_id = %s", (venue_id,)
+    ).fetchone()
+    if venue is None:
+        raise ValueError(f"unknown venue {venue_id}")
+    found = [
+        r[0]
+        for r in conn.execute(
+            "SELECT DISTINCT partition_date FROM raw.vendor_file_current"
+            " WHERE dataset = %s AND partition_date < %s",
+            (dataset, before),
+        ).fetchall()
+    ]
+    missing = [
+        r[0]
+        for r in conn.execute(
+            "SELECT DISTINCT a.partition_date FROM raw.fetch_attempt a"
+            " JOIN raw.feed f USING (feed_id)"
+            " WHERE f.dataset = %s AND a.http_status = 404 AND a.partition_date < %s",
+            (dataset, before),
+        ).fetchall()
+    ]
+    return record_exceptions(conn, venue_id, archive_exceptions(found, missing, venue[0]))

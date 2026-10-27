@@ -107,8 +107,13 @@ Mon 07:00 IST weekly: holiday list for this year and next
 
 ### 5.1 Dagster layout
 
-- **Assets, not jobs.** Each box above is a software-defined asset. File assets and row assets
-  are separate, so a parser fix re-materializes rows from stored files without touching NSE.
+- **Assets, not jobs.** Each box above is a software-defined asset. A session file and its rows
+  are one asset per dataset (`nse_cm_bhavcopy`, `nse_index_close`), because the receipt and
+  the rows are written in one transaction and raw rows are never edited. A parser fix is
+  applied from the stored files by a re-derive job, without touching NSE.
+- **`nse_session_complete`** runs the `file_arrived` check once the 22:30 deadline has passed
+  on a day the calendar calls a session. `xnse_calendar` also records the holidays the archive
+  proves before 2011, so a backfill runs the file assets first, then the calendar, then this.
 - **Partitions.** Daily partitions by calendar date in `Asia/Kolkata`, starting at the backfill
   start date. Every calendar day is a partition, not only weekdays, because NSE runs sessions on
   days a weekday rule misses (Saturday budget days, Sunday 1 Feb 2026, Muhurat trading). For a
@@ -117,9 +122,11 @@ Mon 07:00 IST weekly: holiday list for this year and next
 - **Snapshots** (masters, symbol changes) are unpartitioned assets materialized daily; each run
   stores a new dated snapshot.
 - **Asset checks** wrap the rows in `ops.dq_check`. Dagster shows them; the database stores them.
-  Thresholds live in the table, not in code.
-- **Schedule.** 19:00 IST for the session's files, retried every 30 minutes until 22:30. After
-  22:30 a missing file on an expected session is a critical failure.
+  Thresholds live in the table, not in code. Critical checks are blocking; a check that could
+  not run (no file that day) reports as passed with `evaluated: false` and the reason.
+- **Schedule.** 19:00 IST for the session's files, retried every 30 minutes until 22:30 (one
+  cron, `0,30 19-22 * * *`; a file already received is not fetched again). After 22:30 a
+  missing file on an expected session is a critical failure.
 - **Thin.** Dagster code only wires functions together. Fetching, parsing, storing and checking
   are plain functions in the platform package, testable without Dagster.
 - **Dagster's own storage** (run history, schedules) goes in a separate Postgres database or
@@ -354,7 +361,7 @@ Each task is one short branch and one PR into main.
 | 2 | Migrations 0001 to 0004 | `ops`, `ref`, `raw` schemas, seeds for venue, vendors, feeds, formats and checks, grants for the three roles |
 | 3 | NSE client and bhavcopy parsers (both formats) | Done 27 Oct 2026 (PR #8) |
 | 4 | Index close, holidays, masters and symbol-change parsers; calendar builder | Done 27 Oct 2026 (PR #9) |
-| 5 | Receipts, storage, loaders, check runner | DB scenario tests |
+| 5 | Receipts, storage, loaders, check runner | Done 27 Oct 2026 (PR #10) |
 | 6 | Dagster assets, partitions, schedule, asset checks | Runs locally with `dagster dev` |
 | 7 | Backfill Jun to Aug 2024 into `cagr_test`, then the full history | Acceptance results in the PR |
 | 8 | Five nightly runs | Step one done; spec 0002 starts |

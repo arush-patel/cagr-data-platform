@@ -16,6 +16,7 @@ cagr-data = { workspace = true }
 
 [dependency-groups]
 dev = [
+    "dagster-webserver>=1.9",
     "mypy>=1.13",
     "pytest>=8.3",
     "ruff>=0.8",

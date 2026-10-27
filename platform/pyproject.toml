@@ -10,6 +10,7 @@ dependencies = [
     "polars>=1.20",
     "httpx>=0.28",
     "tenacity>=9.0",
+    "dagster>=1.9",
 ]
 
 [build-system]
