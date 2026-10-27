@@ -1,5 +1,7 @@
 """The PR zip's mcap, Ix and ffix files (spec 0007, section 2), from samples of real files."""
 
+import io
+import zipfile
 from datetime import date
 from decimal import Decimal as D
 from pathlib import Path
@@ -27,6 +29,20 @@ def test_mcap_strips_padding_and_drops_the_totals(nse_fixtures: Path) -> None:
     }  # fmt: skip
     stale = frame.filter(frame["symbol"] == "3RDROCK").row(0, named=True)
     assert (stale["series"], stale["last_trade_date"]) == ("IT", date(2023, 9, 13))
+
+
+def test_mcap_not_traded_is_a_null_last_trade_date(nse_fixtures: Path) -> None:
+    with zipfile.ZipFile(io.BytesIO(_zip(nse_fixtures, "PR010224.zip"))) as zf:
+        csv = zf.read("MCAP01022024.csv")
+    lines = csv.split(b"\n")
+    row = (b"01 FEB 2024,NEWCO,EQ,NEW CO LTD,Listed    ,Not Traded ,   10.00,   1000000,"
+           b"   10.00,   10000000.00")  # fmt: skip
+    out = io.BytesIO()
+    with zipfile.ZipFile(out, "w") as zf:
+        zf.writestr("MCAP01022024.csv", b"\n".join([lines[0], row, *lines[1:]]))
+    frame = parse_mcap(out.getvalue(), date(2024, 2, 1))
+    newco = frame.filter(frame["symbol"] == "NEWCO").row(0, named=True)
+    assert (newco["last_trade_date"], newco["issue_size"]) == (None, 1000000)
 
 
 def test_mcap_member_name_case_changed(nse_fixtures: Path) -> None:

@@ -28,7 +28,8 @@ industry review list and the cap-weighted industry indices all read it (decision
   1 Feb 2024 (`MCAP01022024.csv`; 31 Jan 2024 has none). The last rows are totals (`Listed`,
   `Permitted`, `Total`) with a blank series. `Permitted` securities are listed elsewhere and
   traded on NSE. Rows whose `Last Trade Date` is earlier than the trade date carry a stale
-  close.
+  close. A security that has never traded reads `Not Traded` there (stored as null), with its
+  paid-up value as the close.
 - **2010 to 2013, index members only.** The same zip's `Ix` and `ffix` files carry `ISSUE_CAP`
   for index constituents: about 500 distinct stocks in 2010 (CNX 500 among them) and again
   in 2013, when only `ffix` remains. They stop in 2014.

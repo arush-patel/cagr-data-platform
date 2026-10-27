@@ -44,13 +44,18 @@ class PlatformDatabase(dg.ConfigurableResource["PlatformDatabase"]):
     reuse: bool = False
 
     def connect(self) -> Connection:
+        # Inside a Dagster run the EnvVar is resolved to its value; a direct call (the backfill's
+        # reachability probe) sees the EnvVar itself, whose str is the variable's name.
+        url = self.url.get_value() if isinstance(self.url, dg.EnvVar) else self.url
+        if url is None:
+            raise RuntimeError(f"{self.url} is not set")
         if not self.reuse:
-            return connect(self.url)
-        conn = _KEPT.get(self.url)
+            return connect(url)
+        conn = _KEPT.get(url)
         if conn is None or conn.closed or conn.broken:
             if conn is not None:
                 conn.close()
-            conn = _KEPT[self.url] = _KeptConnection.connect(self.url)
+            conn = _KEPT[url] = _KeptConnection.connect(url)
         return conn
 
 
