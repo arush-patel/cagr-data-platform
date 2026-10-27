@@ -5,8 +5,9 @@ applied adjustments, and weekly and monthly bars from the daily ones.
 
 Every step deletes and inserts its rows in the caller's transaction, so a rerun leaves the same
 rows. The command rebuilds the range a year at a time, committing after each, then proposes the
-price adjustments (cagr_data.reference.adjustments), rebuilds the steps and the weekly and monthly
-bars, and records the clean-layer checks.
+price adjustments (cagr_data.reference.adjustments), rebuilds the steps, the share periods
+(cagr_data.reference.shares) and the weekly and monthly bars, and records the clean-layer checks
+and the ref checks that need the bars.
 """
 
 import argparse
@@ -20,6 +21,7 @@ from cagr_data.core.db import Connection, connect
 from cagr_data.core.settings import Settings
 from cagr_data.quality import runner
 from cagr_data.quality.checks import SAMPLE, Outcome
+from cagr_data.reference import shares
 from cagr_data.reference.adjustments import adjustment_explained, build_adjustments
 from cagr_data.reference.listings import LISTING_SERIES
 
@@ -271,10 +273,18 @@ def check(conn: Connection, run_id: int, start: date, end: date) -> list[Outcome
     params = {k: c.params for k, c in checks.items()}
     outcomes = run_checks(conn, start, end, params)
     # A ref check, but it needs the daily bars, so it runs here.
+    if "mcap_matches_nse" in checks:
+        tolerance = checks["mcap_matches_nse"].params.get("tolerance", 0.01)
+        outcomes.append(shares.mcap_matches_nse(conn, start, end, tolerance))
+    # Ref checks that need the daily bars, so they run here.
     ref = runner.load_checks(conn, "ref")
+    for check_id in ("adjustment_explained", "mcap_rows_mapped", "shares_present",
+                     "walk_back_vs_index"):  # fmt: skip
+        if check_id in ref:
+            checks[check_id] = ref[check_id]
     if "adjustment_explained" in ref:
-        checks["adjustment_explained"] = ref["adjustment_explained"]
         outcomes.append(adjustment_explained(conn, start, end))
+    outcomes += shares.run_checks(conn, start, end, {k: c.params for k, c in ref.items()})
     return runner.record(conn, checks, run_id=run_id, day=end, outcomes=outcomes)
 
 
@@ -305,13 +315,16 @@ def main(argv: list[str] | None = None) -> int:
             conn.commit()
         steps = build_steps(conn)
         conn.commit()
+        counted = shares.build_shares(conn)
+        conn.commit()
         periods = build_periods(conn, args.start, args.end)
         conn.commit()
         failed = check(conn, run_id, args.start, args.end)
         runs.finish_run(conn, run_id, succeeded=not failed)
         conn.commit()
     print(f"{bars} daily bars, {applied} adjustments applied and {pending} pending,"
-          f" {steps} adjustment steps, {periods}")  # fmt: skip
+          f" {steps} adjustment steps, {counted.periods} share periods for"
+          f" {counted.listings} listings, {periods}")  # fmt: skip
     for o in failed:
         print(f"critical: {o.check_id}: {o.detail}", file=sys.stderr)
     return 1 if failed else 0

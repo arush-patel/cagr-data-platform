@@ -6,6 +6,7 @@ import pytest
 
 from cagr_data.clean.bars import build_daily, build_periods, build_steps, run_checks
 from cagr_data.core.db import Connection as Conn
+from cagr_data.reference import shares
 from cagr_data.reference.adjustments import adjustment_explained, build_adjustments
 from cagr_data.reference.calendar import refresh_calendar
 from cagr_data.reference.listing_build import PgStore
@@ -205,3 +206,46 @@ def test_adjustments_from_actions_and_jumps(db: Conn) -> None:
         "SELECT close FROM clean.bar_1d_adjusted WHERE listing_id = %s ORDER BY date", (rel,)
     ).fetchall()
     assert [r[0] for r in adjusted] == [50.0, 51.0, 51.0, 52.0, 50.0, 53.0]
+
+
+def _mcap(db: Conn, day: date, rows: list[tuple[str, int, float]]) -> None:
+    file_id = _file(db, "nse_mcap", day)
+    for symbol, issue_size, market_cap in rows:
+        db.execute(
+            "INSERT INTO raw.nse_mcap (file_id, trade_date, symbol, series, category,"
+            " last_trade_date, issue_size, close, market_cap_inr)"
+            " VALUES (%s, %s, %s, 'EQ', 'Listed', %s, %s, 53, %s)",
+            (file_id, day, symbol, day, issue_size, market_cap),
+        )
+
+
+def test_share_periods_walk_back_from_mcap(db: Conn) -> None:
+    ids = _seed(db)
+    build_daily(db, DAYS[0], DAYS[-1])
+    rel = ids["RELIANCE"]
+    _bonus(db, rel, DAYS[2])
+    build_adjustments(db, DAYS[0], DAYS[-1])
+    _mcap(db, DAYS[5], [("RELIANCE", 1000, 53000), ("UNKNOWN", 10, 10)])
+
+    result = shares.build_shares(db)
+    assert (result.listings, result.periods) == (1, 3)
+    periods = db.execute(
+        "SELECT valid_from, valid_to, shares, source FROM ref.listing_shares ORDER BY 1"
+    ).fetchall()
+    assert periods == [
+        (DAYS[0], DAYS[2], 500, "walk_back"),  # before the 1:1 bonus
+        (DAYS[2], DAYS[5], 1000, "walk_back"),
+        (DAYS[5], None, 1000, "nse_mcap"),
+    ]
+    caps = db.execute(
+        "SELECT market_cap_inr FROM clean.market_cap_1d WHERE listing_id = %s ORDER BY date",
+        (rel,),
+    ).fetchall()
+    assert [float(r[0]) for r in caps] == [50000, 51000, 51000, 52000, 50000, 53000]
+    assert shares.build_shares(db).periods == 3  # a rebuild replaces, never duplicates
+
+    outcomes = {o.check_id: o for o in shares.run_checks(db, DAYS[0], DAYS[-1], {})}
+    assert not outcomes["mcap_rows_mapped"].passed  # UNKNOWN has no listing
+    assert outcomes["shares_present"].passed
+    assert outcomes["walk_back_vs_index"].passed
+    assert shares.mcap_matches_nse(db, DAYS[0], DAYS[-1], 0.01).passed
