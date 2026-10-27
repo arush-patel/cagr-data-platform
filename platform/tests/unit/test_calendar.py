@@ -107,6 +107,15 @@ def test_a_year_from_the_holiday_api(nse_fixtures: Path) -> None:
     )
 
 
+def test_special_live_trading_is_not_a_holiday() -> None:
+    holidays = parse_holidays(
+        b'{"CM": [{"tradingDate": "02-Mar-2024", "weekDay": "Saturday",'
+        b' "description": "Special Live Trading"},'
+        b' {"tradingDate": "08-Mar-2024", "weekDay": "Friday", "description": "Mahashivaratri"}]}'
+    )
+    assert [e.date for e in holiday_exceptions(holidays)] == [date(2024, 3, 8)]
+
+
 def test_archive_proof() -> None:
     mon = date(2010, 1, 4)
     found = [mon, mon + timedelta(1), mon + timedelta(3), mon + timedelta(5)]  # Mon Tue Thu Sat

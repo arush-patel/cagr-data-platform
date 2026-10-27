@@ -256,6 +256,8 @@ is expected once a year, for Muhurat trading on Diwali: the file is loaded, a `s
 exception is written beside the holiday, and the `holiday_session` warning asks a person to
 confirm it. A date can therefore hold both a holiday and a special-session exception; the
 special session wins when the calendar is built.
+NSE's holiday list also carries trading days, such as "Special Live Trading" on Sat 2 Mar 2024.
+Those entries are not read as holidays.
 
 ### 7.3 Idempotence
 
