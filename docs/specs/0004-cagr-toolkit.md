@@ -116,12 +116,14 @@ runs the lab's quick tests on every toolkit change. What stays:
 - Because the Observatory builds on it from the start, the toolkit's public functions need to stay
   stable early: a change to what one returns is a version bump with a changelog line (section 7).
 
-### What moves out of `platform`
+### Connections: what stays in `platform`
 
-`platform/src/cagr_data/core/db.py` and `settings.py` already hold connection and settings code.
-The read-only connection and the `CAGR_*` settings convention move down into `cagr.db` in slice
-T1, and `platform` imports them from there. The writer and owner roles, migrations and COPY
-loaders stay in `platform`.
+`platform` opens only two kinds of connection: the owner (`cagr_platform`, `CAGR_DATABASE_URL`)
+for migrations, and the pipeline writer (`cagr_writer`, `CAGR_PIPELINE_DATABASE_URL`) for
+Dagster. Both write, so both stay in `platform/src/cagr_data/core/db.py`. The toolkit's
+`cagr.db` is the read-only side (`cagr_read`, `CAGR_READ_DATABASE_URL`) and is new code, not a
+move: there was no read-only connection in `platform` to move. `platform` starts importing the
+toolkit when its feature engine runs `cagr.fs` features on `cagr.ind` indicators.
 
 ## 5. What is in it
 
@@ -277,7 +279,7 @@ need no data can start now.
 
 | Slice | What | Needs | Can start |
 |---|---|---|---|
-| **T1** | Package skeleton in the uv workspace; `cagr.db` (moved down from `platform`); `cagr.ind` and `cagr.metrics` with their tests; `cagr.calendar`; `cagr.splits`; the `@fs.feature` decorator, warm-up and the truncation test on synthetic bars; CI import rule | Nothing beyond spec 0001 | Now |
+| **T1** | Package skeleton in the uv workspace; `cagr.db` (read-only connections); `cagr.ind` and `cagr.metrics` with their tests; `cagr.calendar`; `cagr.splits`; the `@fs.feature` decorator, warm-up and the truncation test on synthetic bars; CI import rule | Nothing beyond spec 0001 | Now |
 | **T2** | `cagr.data` and `cagr.lake` over clean bars and listings; `fs.preview`; `cagr lake sync` | Specs 0002 and 0003, the lake export of bars | After 0003 |
 | **T3** | `fs.register` (experimental lane), `cagr.dataset` on (listing, date) and event rows | The `fb` registry migration; the first few features | After T2 |
 | **T4** | `cagr.track` (MLflow) and `cagr.report`; port the two notebooks | Nothing new | After T3 |
