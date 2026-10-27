@@ -59,6 +59,16 @@ def test_ohlc_order() -> None:
     assert not outcome.passed and outcome.observed["rows"] == 1
 
 
+def test_ohlc_order_holds_only_open_for_series_with_a_borrowed_close() -> None:
+    # BANKBARODA T0 on 3 Jun 2024: open, high, low 289.75, close 296.95 (the EQ close).
+    t0 = ("BANKBARODA", "T0", None, 50, "289.75", "289.75", "289.75", "296.95")
+    params = {"close_exempt_series": ["T0"]}
+    assert not qc.ohlc_order(_bars(GOOD, t0)).passed
+    assert qc.ohlc_order(_bars(GOOD, t0), params).passed
+    bad_open = ("BANKBARODA", "T0", None, 50, "300", "289.75", "289.75", "296.95")
+    assert not qc.ohlc_order(_bars(GOOD, bad_open), params).passed
+
+
 def test_isin_present_from_its_start_date() -> None:
     params = {"from": "2011-06-22", "series": ["EQ"]}
     frame = _bars(

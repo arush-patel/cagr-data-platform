@@ -70,9 +70,12 @@ def prices_positive(frame: pl.DataFrame) -> Outcome:
     )
 
 
-def ohlc_order(frame: pl.DataFrame) -> Outcome:
+def ohlc_order(frame: pl.DataFrame, params: Mapping[str, Any] | None = None) -> Outcome:
+    """low <= open, close <= high. In params["close_exempt_series"] (NSE's T0 segment) the close
+    is the normal segment's closing price, so only open is held between low and high there."""
     o, h, lo, c = (pl.col(n) for n in ("open", "high", "low", "close"))
-    bad = frame.filter((lo > o) | (lo > c) | (h < o) | (h < c))
+    exempt = pl.col("series").is_in(list((params or {}).get("close_exempt_series", [])))
+    bad = frame.filter((lo > o) | (h < o) | (~exempt & ((lo > c) | (h < c))))
     return Outcome(
         "ohlc_order",
         bad.height == 0,

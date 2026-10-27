@@ -126,3 +126,11 @@ def test_crlf_line_endings() -> None:
     row = "A,EQ,1,2,1,2,2,1,10,20,05-JUL-2024,"
     frame = parse_bhavcopy(_zip(f"{header}\r\n{row}\r\n"), "legacy_v1", date(2024, 7, 5))
     assert frame["close"].to_list() == [Decimal("2.0000")]
+
+
+def test_a_last_price_of_zero_is_missing() -> None:
+    # Legacy writes 0 on untraded bond rows; UDiFF leaves the field empty.
+    header = "SYMBOL,SERIES,OPEN,HIGH,LOW,CLOSE,LAST,PREVCLOSE,TOTTRDQTY,TOTTRDVAL,TIMESTAMP,"
+    rows = ["A,NT,100,100,100,100,0,100,1,100,05-JUL-2024,", "B,EQ,1,2,1,2,2,1,10,20,05-JUL-2024,"]
+    frame = parse_legacy("\n".join([header, *rows, ""]).encode())
+    assert frame["last"].to_list() == [None, Decimal("2.0000")]
