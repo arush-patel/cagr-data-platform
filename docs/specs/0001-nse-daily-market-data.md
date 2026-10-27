@@ -228,7 +228,10 @@ The partition still runs, makes one request, and expects a 404. A 404 is recorde
 `raw.fetch_attempt` and the partition succeeds with nothing to load. A 200 on a day the holiday
 list does not call a holiday (a weekend) is a special session: the file is loaded and a
 `special_session` exception with `source = archive_proof` is written. A 200 on a listed holiday
-is a contradiction and a critical failure for a person to look at.
+is expected once a year, for Muhurat trading on Diwali: the file is loaded, a `special_session`
+exception is written beside the holiday, and the `holiday_session` warning asks a person to
+confirm it. A date can therefore hold both a holiday and a special-session exception; the
+special session wins when the calendar is built.
 
 ### 7.3 Idempotence
 
@@ -265,7 +268,7 @@ change.
 | `trade_date_matches` | The date inside the file equals the partition date | critical |
 | `no_duplicates` | One row per (symbol, series) in bhavcopy; one per index name in index closes | critical |
 | `row_count` | Bhavcopy rows within 10% (or 50 rows, whichever is larger) of the median of the previous 20 sessions | critical |
-| `holiday_contradiction` | No file on a listed holiday | critical |
+| `holiday_session` | A file on a listed holiday (expected only for Muhurat trading) | warn |
 | `benchmark_present` | Nifty 50 is in the index file | critical |
 | `prices_positive` | open, high, low, close > 0 where volume > 0 | warn |
 | `ohlc_order` | low ≤ open, close ≤ high | warn |
@@ -296,7 +299,7 @@ cagr-data-platform/
 │       ├── fixtures/nse/       # small real files, trimmed, fetched fresh in task 0
 │       ├── unit/               # parsers, url builders, calendar rules
 │       └── db/                 # scenarios against Postgres 17
-├── db/migrations/              # 0001_ops.sql, 0002_ref_calendar.sql, 0003_raw.sql, 0004_seed_feeds_checks.sql
+├── db/migrations/              # 0001_ops.sql, 0002_ref_calendar.sql, 0003_raw.sql, 0004_seed_xnse.sql
 ├── docs/specs/                 # this spec and the ones after it
 └── .github/workflows/ci.yml    # ruff, mypy, pytest with a Postgres 17 service
 ```

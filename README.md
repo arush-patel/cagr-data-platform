@@ -7,6 +7,7 @@ see `docs/specs/` for what each step does.
 ## What is here so far
 
 - `platform/`: the data platform package `cagr-data` (Python).
+- `db/migrations/`: numbered SQL migrations for every schema, applied in order with yoyo.
 - `docs/specs/`: one spec per step. Step one is `0001-nse-daily-market-data.md`.
 
 ## Working on it
@@ -19,7 +20,14 @@ uv run ruff check .        # lint
 uv run ruff format .       # format
 uv run mypy                # type-check
 uv run pytest              # tests; database tests run when CAGR_TEST_DATABASE_URL is set
+
+# apply pending migrations as the owner role (cagr_platform), using CAGR_DATABASE_URL
+uv run python -m cagr_data.core.migrate --list   # what would run
+uv run python -m cagr_data.core.migrate          # run it
 ```
+
+`CAGR_TEST_DATABASE_URL` must be a login that can create roles and databases: the tests make
+the three platform roles if missing and a fresh `cagr_migrate_test` database for each run.
 
 Settings come from `CAGR_*` environment variables or a `.env` file (never committed):
 `CAGR_DATABASE_URL` for the platform database and `CAGR_RAW_ROOT` for where original vendor
