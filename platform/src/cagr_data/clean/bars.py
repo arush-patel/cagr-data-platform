@@ -4,8 +4,9 @@ applied adjustments, and weekly and monthly bars from the daily ones.
     uv run python -m cagr_data.clean.bars 2010-01-01 2026-10-26
 
 Every step deletes and inserts its rows in the caller's transaction, so a rerun leaves the same
-rows. The command rebuilds the range a year at a time, committing after each, then the steps,
-the weekly and monthly bars, and records the clean-layer checks.
+rows. The command rebuilds the range a year at a time, committing after each, then proposes the
+price adjustments (cagr_data.reference.adjustments), rebuilds the steps and the weekly and monthly
+bars, and records the clean-layer checks.
 """
 
 import argparse
@@ -19,6 +20,7 @@ from cagr_data.core.db import Connection, connect
 from cagr_data.core.settings import Settings
 from cagr_data.quality import runner
 from cagr_data.quality.checks import SAMPLE, Outcome
+from cagr_data.reference.adjustments import adjustment_explained, build_adjustments
 from cagr_data.reference.listings import LISTING_SERIES
 
 CRORE = 10_000_000
@@ -267,9 +269,13 @@ def check(conn: Connection, run_id: int, start: date, end: date) -> list[Outcome
     """Run and record the clean checks. Returns the critical failures."""
     checks = runner.load_checks(conn, "clean")
     params = {k: c.params for k, c in checks.items()}
-    return runner.record(
-        conn, checks, run_id=run_id, day=end, outcomes=run_checks(conn, start, end, params)
-    )
+    outcomes = run_checks(conn, start, end, params)
+    # A ref check, but it needs the daily bars, so it runs here.
+    ref = runner.load_checks(conn, "ref")
+    if "adjustment_explained" in ref:
+        checks["adjustment_explained"] = ref["adjustment_explained"]
+        outcomes.append(adjustment_explained(conn, start, end))
+    return runner.record(conn, checks, run_id=run_id, day=end, outcomes=outcomes)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -284,12 +290,19 @@ def main(argv: list[str] | None = None) -> int:
     with connect(secret.get_secret_value()) as conn:
         run_id = runs.start_run(conn, "manual")
         conn.commit()
-        bars = 0
-        for year in range(args.start.year, args.end.year + 1):
-            lo, hi = max(args.start, date(year, 1, 1)), min(args.end, date(year, 12, 31))
+        bars = applied = pending = 0
+        years = [
+            (max(args.start, date(y, 1, 1)), min(args.end, date(y, 12, 31)))
+            for y in range(args.start.year, args.end.year + 1)
+        ]
+        for lo, hi in years:
             bars += build_daily(conn, lo, hi)
             conn.commit()
         conn.execute("ANALYZE clean.bar_1d")
+        for lo, hi in years:
+            adjustments = build_adjustments(conn, lo, hi)
+            applied, pending = applied + adjustments.applied, pending + adjustments.pending
+            conn.commit()
         steps = build_steps(conn)
         conn.commit()
         periods = build_periods(conn, args.start, args.end)
@@ -297,7 +310,8 @@ def main(argv: list[str] | None = None) -> int:
         failed = check(conn, run_id, args.start, args.end)
         runs.finish_run(conn, run_id, succeeded=not failed)
         conn.commit()
-    print(f"{bars} daily bars, {steps} adjustment steps, {periods}")
+    print(f"{bars} daily bars, {applied} adjustments applied and {pending} pending,"
+          f" {steps} adjustment steps, {periods}")  # fmt: skip
     for o in failed:
         print(f"critical: {o.check_id}: {o.detail}", file=sys.stderr)
     return 1 if failed else 0

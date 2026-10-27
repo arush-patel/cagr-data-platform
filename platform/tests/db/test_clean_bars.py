@@ -6,6 +6,7 @@ import pytest
 
 from cagr_data.clean.bars import build_daily, build_periods, build_steps, run_checks
 from cagr_data.core.db import Connection as Conn
+from cagr_data.reference.adjustments import adjustment_explained, build_adjustments
 from cagr_data.reference.calendar import refresh_calendar
 from cagr_data.reference.listing_build import PgStore
 from cagr_data.reference.listings import Book, Row
@@ -162,3 +163,45 @@ def test_checks_catch_a_missing_bar_and_an_unexplained_jump(db: Conn) -> None:
     assert not outcomes["index_benchmark_present"].passed
     assert not outcomes["period_bars_match"].passed
     assert outcomes["bars_complete"].passed and outcomes["bar_on_session"].passed
+
+
+def _bonus(db: Conn, listing_id: int, ex_date: date) -> None:
+    file_id = _file(db, "nse_corporate_actions", date(2024, 1, 1))
+    db.execute(
+        "INSERT INTO ref.corporate_action (listing_id, ex_date, subject, seq, kind, ratio_new,"
+        " ratio_old, parse_status, source_file_id) VALUES (%s, %s, 'Bonus 1:1', 1, 'bonus', 1, 1,"
+        " 'parsed', %s)",
+        (listing_id, ex_date, file_id),
+    )
+
+
+def test_adjustments_from_actions_and_jumps(db: Conn) -> None:
+    ids = _seed(db)
+    build_daily(db, DAYS[0], DAYS[-1])
+    rel = ids["RELIANCE"]
+    assert not adjustment_explained(db, DAYS[0], DAYS[-1]).passed
+
+    # A jump with no action waits for review; once rejected it is never proposed again.
+    result = build_adjustments(db, DAYS[0], DAYS[-1])
+    assert (result.events, result.applied, result.pending) == (1, 0, 1)
+    assert adjustment_explained(db, DAYS[0], DAYS[-1]).passed
+    db.execute("UPDATE ref.price_adjustment SET status = 'rejected', decided_by = 'arush',"
+               " decided_at = now()")  # fmt: skip
+    assert build_adjustments(db, DAYS[0], DAYS[-1]).events == 0
+
+    # With the bonus announced, a fresh build applies it from the action.
+    db.execute("DELETE FROM ref.price_adjustment")
+    _bonus(db, rel, DAYS[2])
+    result = build_adjustments(db, DAYS[0], DAYS[-1])
+    assert (result.applied, result.pending) == (1, 0)
+    row = db.execute(
+        "SELECT ex_date, factor, observed_factor, close_before, close_on, status, auto,"
+        " proposed_by, action_id IS NOT NULL FROM ref.price_adjustment"
+    ).fetchone()
+    assert row == (DAYS[2], 0.5, 0.5, 102, 51, "applied", True, "rules", True)
+    assert build_adjustments(db, DAYS[0], DAYS[-1]).events == 0  # a rerun adds nothing
+    build_steps(db)
+    adjusted = db.execute(
+        "SELECT close FROM clean.bar_1d_adjusted WHERE listing_id = %s ORDER BY date", (rel,)
+    ).fetchall()
+    assert [r[0] for r in adjusted] == [50.0, 51.0, 51.0, 52.0, 50.0, 53.0]
