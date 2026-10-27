@@ -7,6 +7,9 @@ see `docs/specs/` for what each step does.
 ## What is here so far
 
 - `platform/`: the data platform package `cagr-data` (Python).
+- `toolkit/`: the shared library `cagr-toolkit`, imported as `cagr` (spec 0004): indicators,
+  performance metrics, session calendars, time-based splits, feature declarations and read-only
+  database access. It never imports `cagr_data`.
 - `db/migrations/`: numbered SQL migrations for every schema, applied in order with yoyo.
 - `docs/specs/`: one spec per step. Step one is `0001-nse-daily-market-data.md`.
 
@@ -34,6 +37,7 @@ Settings come from `CAGR_*` environment variables or a `.env` file (never commit
 - `CAGR_DATABASE_URL`: the owner's login (`cagr_platform`), used only to apply migrations.
 - `CAGR_PIPELINE_DATABASE_URL`: the pipeline's login (`cagr_writer`), used by Dagster.
 - `CAGR_RAW_ROOT`: the folder where original vendor files are kept.
+- `CAGR_READ_DATABASE_URL`: a read-only login (`cagr_read`), used by the toolkit's `cagr.db`.
 
 ## Running the NSE pipeline (spec 0001)
 
