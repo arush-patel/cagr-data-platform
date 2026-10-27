@@ -6,12 +6,14 @@ The pipeline only sees the Storage protocol, so moving from a local folder to Az
 configuration plus one class.
 """
 
+import io
 import os
 import tempfile
+import zipfile
 from datetime import date
 from pathlib import Path
 from typing import Protocol
-from urllib.parse import unquote, urlsplit
+from urllib.parse import quote, unquote, urlsplit
 
 
 class StorageConflictError(Exception):
@@ -25,6 +27,14 @@ class Storage(Protocol):
 
     def get(self, uri: str) -> bytes:
         """The bytes stored at a URI this storage returned."""
+        ...
+
+    def pack(self, key: str, members: dict[str, bytes]) -> dict[str, str]:
+        """Store members as one archive under key; returns each member's URI."""
+        ...
+
+    def delete(self, uri: str) -> None:
+        """Remove a loose file this storage returned. Archives are never deleted."""
         ...
 
 
@@ -44,7 +54,9 @@ def raw_key(
 
 
 class LocalStorage:
-    """Files under a local folder, addressed by file:// URIs."""
+    """Files under a local folder, addressed by file:// URIs. A file packed into an archive is
+    addressed by the archive's URI with the member's name as the fragment
+    (file:///.../2010/01.zip#cm04JAN2010bhav.csv.zip)."""
 
     def __init__(self, root: Path) -> None:
         self.root = root.resolve()
@@ -71,11 +83,36 @@ class LocalStorage:
             os.unlink(tmp)
         return path.as_uri()
 
-    def get(self, uri: str) -> bytes:
+    def _local(self, uri: str) -> tuple[Path, str]:
         parts = urlsplit(uri)
         if parts.scheme != "file":
             raise ValueError(f"not a file URI: {uri}")
         path = Path(unquote(parts.path)).resolve()
         if not path.is_relative_to(self.root):
             raise ValueError(f"{uri} is outside {self.root}")
+        return path, unquote(parts.fragment)
+
+    def get(self, uri: str) -> bytes:
+        path, member = self._local(uri)
+        if member:
+            with zipfile.ZipFile(path) as zf:
+                return zf.read(member)
         return path.read_bytes()
+
+    def pack(self, key: str, members: dict[str, bytes]) -> dict[str, str]:
+        """Write members into a new zip at key. Members that are already zips are stored as
+        they are; the rest are deflated."""
+        out = io.BytesIO()
+        with zipfile.ZipFile(out, "w") as zf:
+            for name, content in sorted(members.items()):
+                packed = name.lower().endswith(".zip")
+                zf.writestr(name, content,
+                            zipfile.ZIP_STORED if packed else zipfile.ZIP_DEFLATED)  # fmt: skip
+        uri = self.put(key, out.getvalue())
+        return {name: f"{uri}#{quote(name)}" for name in members}
+
+    def delete(self, uri: str) -> None:
+        path, member = self._local(uri)
+        if member:
+            raise ValueError(f"{uri} is inside an archive; archives are kept")
+        path.unlink(missing_ok=True)
