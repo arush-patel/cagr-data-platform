@@ -20,7 +20,7 @@ platform will use.
 | [Trading calendar](data-model/calendar.md) | How we know which days NSE traded |
 | [NSE daily pipeline](pipeline/nse-daily.md) | What runs each night, and how a file gets from NSE into the database |
 | [Data quality](pipeline/data-quality.md) | The checks run on every file |
-| [Toolkit](toolkit/README.md) | The `cagr` library's functions |
+| [Toolkit](toolkit/README.md) | The `cagr` library's functions, and the first shared features |
 | [Observatory](observatory/README.md) | The web app: how to run it and what's built |
 | [Running the platform](operations/running.md) | Settings, migrations, the pipeline and backfills |
 | [Development](operations/development.md) | Tests, lint, CI and conventions |
@@ -28,7 +28,7 @@ platform will use.
 ## Not built yet
 
 These are not documented here: listings and corporate actions (spec 0002), adjusted bars
-(spec 0003), the feature lake, the lab, the Observatory's pages, and deployment to the VM.
+(spec 0003), the feature lake, the lab's notebooks, the Observatory's pages, and deployment to the VM.
 
 ## Writing these pages
 

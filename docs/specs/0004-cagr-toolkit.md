@@ -84,7 +84,8 @@ Three layers. A lower layer never imports a higher one.
 | Definitions | `cagr.fs` | `@feature` and `@label`, warm-up, the no-future check | Built |
 | Access | `cagr.db` | Read-only Postgres connection (`cagr_read`) | Built |
 | | `cagr.report` | Excel workbook with a Run sheet first | Built |
-| | `cagr.data`, `cagr.lake` | Read bars, listings and features from the lake or Postgres | Waits for clean bars |
+| | `cagr.data` | Read listings, bars and market cap from Postgres, as of a date | Built |
+| | `cagr.lake` | The same reads from the lake | Waits for the lake export |
 | | `cagr.track` | MLflow run logging | Later |
 | | `cagr` command | `lake sync`, `preview`, `register`, `promote` | Later |
 
@@ -150,8 +151,9 @@ with report.workbook("reports/contraction.xlsx", "Contraction by industry") as w
 | Slice | What | Status |
 |---|---|---|
 | T1 | Package, `db`, `ind`, `metrics`, `calendar`, `splits`, `fs` | Done |
-| T1b | `formula`, `dataset` (on frames), `report` | This PR |
-| T2 | `data` and `lake` reads, `fs.preview`, `cagr lake sync` | After specs 0002 and 0003 |
+| T1b | `formula`, `dataset` (on frames), `report` | Done |
+| T2 | `data` reads from Postgres, `data.preview`, the first features in `lab/features/` | Done |
+| T2b | `lake` reads and `cagr lake sync` | With the lake export spec |
 | T3 | `fs.register` (experimental features), datasets read from the lake | After T2 |
 | T4 | `track` (MLflow), port the two notebooks | After T3 |
 | T5 | `cagr promote`, the Observatory read layer | With the production feature lane |

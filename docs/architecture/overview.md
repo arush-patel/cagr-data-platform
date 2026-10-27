@@ -18,6 +18,7 @@ flowchart LR
 |---|---|
 | `platform/` | The data platform package, `cagr_data` |
 | `toolkit/` | The shared library, `cagr` |
+| `lab/` | Research: shared features, label drafts and their tests |
 | `observatory/` | The web app: Python API and React UI |
 | `db/migrations/` | Numbered SQL files that create every table |
 | `docs/` | These pages, and `docs/specs/` for plans |
@@ -42,8 +43,9 @@ Dagster.
 
 ## The toolkit: `cagr`
 
-Indicators, metrics, session arithmetic, train/test splits, feature declarations and read-only
-database access. See [Toolkit](../toolkit/README.md).
+Indicators, metrics, session arithmetic, train/test splits, feature declarations, analysts'
+formulas, datasets, Excel reports, and point-in-time reads of listings, bars and market cap. See
+[Toolkit](../toolkit/README.md).
 
 **Rule:** the toolkit never imports the platform. A test enforces it.
 

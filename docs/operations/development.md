@@ -16,7 +16,8 @@ uv run pytest                # tests
 |---|---|---|
 | `platform/tests/unit/` | no | Parsers (on real NSE files), HTTP client, storage, checks, calendar, Dagster wiring |
 | `platform/tests/db/` | yes | Migrations and loading files end to end |
-| `toolkit/tests/` | only `test_cagr_db.py` | Every toolkit module |
+| `toolkit/tests/` | only `test_cagr_db.py` and `test_cagr_data.py` | Every toolkit module, and its reads against the real schema |
+| `lab/tests/` | no | Every shared lab feature passes the look-ahead check |
 
 Database tests run only when `CAGR_TEST_DATABASE_URL` is set. That login must be able to create
 roles and databases, because the tests build a fresh database and apply every migration.
