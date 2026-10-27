@@ -287,6 +287,39 @@ nse_sme_equity_list = _snapshot(
 nse_symbol_change = _snapshot(
     "nse_symbol_change", "Today's symbolchange.csv in raw.nse_symbol_change"
 )
+nse_etf_list = _snapshot("nse_etf_list", "Today's eq_etfseclist.csv in raw.nse_etf_list")
+
+CORPORATE_ACTION_DATASETS = ("nse_corporate_actions", "nse_sme_corporate_actions")
+FIRST_CORPORATE_ACTIONS = date(2010, 1, 1)
+
+
+@dg.asset(
+    check_specs=_specs("nse_corporate_actions", SNAPSHOT_CHECKS),
+    group_name="nse",
+    description=(
+        "NSE's corporate actions (main board and SME), one file per year of ex-dates, in"
+        " raw.nse_corporate_action. Missing years are fetched; this year and next are fetched"
+        " again each run, so a new announcement becomes a new revision"
+    ),
+)
+def nse_corporate_actions(
+    context: dg.AssetExecutionContext, db: PlatformDatabase, raw: RawStorage, nse: NseClient
+) -> Iterator[dg.AssetCheckResult | Materialized]:
+    year = today_ist().year
+    fetched: list[FetchOutcome] = []
+    outcomes: list[Outcome] = []
+    critical: list[Outcome] = []
+    for dataset in CORPORATE_ACTION_DATASETS:
+        for y in range(FIRST_CORPORATE_ACTIONS.year, year + 2):
+            f, o, c = _fetch(context, db, raw, nse, dataset, date(y, 1, 1), "manual",
+                             revision_check=y >= year, feed_ids=[dataset])  # fmt: skip
+            fetched += f
+            outcomes += o
+            critical += c
+    yield from _check_results(SNAPSHOT_CHECKS, outcomes, "no new file")
+    yield dg.MaterializeResult(metadata=_metadata(fetched))
+    if critical:
+        raise dg.Failure("a corporate-actions response could not be read")
 
 
 def deadline_passed(day: date, now: datetime) -> bool:

@@ -104,3 +104,47 @@ def parse_symbol_change(csv: bytes, snapshot_date: date) -> pl.DataFrame:
     frame = cast(frame, SYMBOL_CHANGE_SCHEMA)
     _require(frame, ["old_symbol", "new_symbol", "change_date"], "symbol change")
     return frame
+
+
+ETF_LIST_SCHEMA: dict[str, pl.DataType] = {
+    "snapshot_date": pl.Date(),
+    "symbol": pl.String(),
+    "underlying": pl.String(),
+    "security_name": pl.String(),
+    "listing_date": pl.Date(),
+    "market_lot": pl.Int32(),
+    "isin": pl.String(),
+    "face_value": pl.Decimal(18, 4),
+    "etf_underlying": pl.String(),
+    "underlying_key": pl.String(),
+}
+
+ETF_LIST_COLUMNS = (
+    "Symbol", "Underlying Asset", "SecurityName", "DateofListing", "MarketLot", "ISINNumber",
+    "FaceValue", "ETF Underlying", "Underlying Key",
+)  # fmt: skip
+
+
+def parse_etf_list(csv: bytes, snapshot_date: date) -> pl.DataFrame:
+    """Parse eq_etfseclist.csv, NSE's list of ETFs (all with INF ISINs; none in EQUITY_L).
+    Listing dates have a two-digit year (08-Jan-02)."""
+    names = header(csv)
+    if tuple(names) != ETF_LIST_COLUMNS:
+        raise FileShapeError(f"unexpected ETF list header: {names}")
+    raw = body(csv, names)
+    frame = raw.select(
+        snapshot_date=pl.lit(snapshot_date, pl.Date),
+        symbol=text("Symbol"),
+        underlying=text("Underlying Asset"),
+        security_name=text("SecurityName"),
+        listing_date=parse_date("DateofListing", "%d-%b-%y"),
+        market_lot=text("MarketLot"),
+        isin=text("ISINNumber"),
+        face_value=text("FaceValue"),
+        etf_underlying=text("ETF Underlying"),
+        underlying_key=text("Underlying Key"),
+    )
+    check_dates_parsed(frame, raw, {"listing_date": "DateofListing"})
+    frame = cast(frame, ETF_LIST_SCHEMA)
+    _require(frame, ["symbol", "isin"], "ETF list")
+    return frame

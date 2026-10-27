@@ -9,6 +9,7 @@ from cagr_data.vendors.nse.listings import (
     EQUITY_LIST_SCHEMA,
     SYMBOL_CHANGE_SCHEMA,
     parse_equity_list,
+    parse_etf_list,
     parse_symbol_change,
 )
 
@@ -80,3 +81,20 @@ def test_symbol_change_needs_both_symbols(nse_fixtures: Path) -> None:
     csv = (nse_fixtures / "symbolchange.csv").read_bytes().replace(b",IIFLWAM,", b",,", 1)
     with pytest.raises(FileShapeError, match="old_symbol"):
         parse_symbol_change(csv, SNAPSHOT)
+
+
+def test_etf_list(nse_fixtures: Path) -> None:
+    frame = parse_etf_list((nse_fixtures / "eq_etfseclist.csv").read_bytes(), SNAPSHOT)
+    assert frame.height == 3
+    first = frame.row(0, named=True)
+    assert first["symbol"] == "NIFTYBEES"
+    assert first["listing_date"] == date(2002, 1, 8)
+    assert first["isin"] == "INF204KB14I2"
+    assert first["etf_underlying"] == "EQUITY"
+    assert frame["face_value"].to_list()[2] == Decimal("1000")
+
+
+def test_etf_list_header_is_checked(nse_fixtures: Path) -> None:
+    csv = (nse_fixtures / "eq_etfseclist.csv").read_bytes().replace(b"ISINNumber", b"ISIN")
+    with pytest.raises(FileShapeError):
+        parse_etf_list(csv, SNAPSHOT)

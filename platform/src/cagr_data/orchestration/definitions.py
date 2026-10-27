@@ -20,7 +20,13 @@ calendar_job = dg.define_asset_job(
 )
 snapshot_job = dg.define_asset_job(
     "nse_snapshots",
-    selection=[assets.nse_equity_list, assets.nse_sme_equity_list, assets.nse_symbol_change],
+    selection=[
+        assets.nse_equity_list,
+        assets.nse_sme_equity_list,
+        assets.nse_symbol_change,
+        assets.nse_etf_list,
+        assets.nse_corporate_actions,
+    ],
 )
 
 
@@ -62,6 +68,8 @@ defs = dg.Definitions(
         assets.nse_equity_list,
         assets.nse_sme_equity_list,
         assets.nse_symbol_change,
+        assets.nse_etf_list,
+        assets.nse_corporate_actions,
         assets.nse_session_complete,
     ],
     jobs=[session_job, calendar_job, snapshot_job],
