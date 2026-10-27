@@ -1,9 +1,10 @@
 # Data quality
 
-**In short:** every file is checked when it is loaded. A **critical** failure stops the run. A
-**warning** is recorded and the run continues. All results are saved in `ops.dq_result`.
+**In short:** checks run at three points: when a file is loaded (`raw`), when listings are built
+(`ref`), and when bars are built (`clean`). A **critical** failure stops the run. A **warning** is
+recorded and the run continues. All results are saved in `ops.dq_result`.
 
-## The checks
+## When a file is loaded (`raw`)
 
 | Check | Level | Passes when |
 |---|---|---|
@@ -19,6 +20,39 @@
 | `holiday_session` | warning | No file arrived on a listed holiday |
 | `vendor_revision` | warning | NSE has not changed a file we already had |
 | `special_session` | info | No file arrived on an unlisted weekend day |
+
+## When listings are built (`ref`)
+
+| Check | Level | Passes when |
+|---|---|---|
+| `listing_unique_symbol` | critical | No symbol belongs to two listings on the same day |
+| `listing_unique_isin` | critical | No ISIN belongs to two listings on the same day |
+| `listing_rows_mapped` | critical | Every price row in a listing series maps to exactly one listing |
+| `listing_isin_present` | warning | Every active equity listing has an ISIN (from 22 Jun 2011) |
+| `symbol_change_confirmed` | warning | Each symbol change the rules made matches a row in `symbolchange.csv` |
+| `master_coverage` | warning | NSE's company and ETF lists and our listings agree |
+| `corporate_action_parsed` | warning | Every action with an ex-date in the next 3 sessions was parsed |
+| `review_waiting` | warning | No review item has waited more than 3 sessions |
+
+## When bars are built (`clean`)
+
+| Check | Level | Passes when |
+|---|---|---|
+| `bar_on_session` | critical | Every bar's date is a trading day |
+| `bars_complete` | critical | Every raw row in a listing series made exactly one bar |
+| `index_benchmark_present` | critical | Nifty 50 has a bar on every trading day since 21 Feb 2012 |
+| `period_bars_match` | critical | Each weekly and monthly bar agrees with its daily bars |
+| `bar_ohlc_order` | warning | Low ≤ open, close ≤ high on each bar |
+| `adjusted_jump` | warning | No adjusted close moves more than 25% in a day without an adjustment |
+| `adjustment_explained` | warning | Every price jump has an adjustment, applied or waiting for review |
+| `mcap_rows_mapped` | warning | Every row of NSE's mcap file maps to a listing |
+| `shares_present` | warning | Every equity listing that traded has a share count |
+| `mcap_matches_nse` | warning | Our market cap is within 1% of NSE's |
+| `walk_back_vs_index` | warning | Share counts worked out from corporate actions are within 5% of NSE's 2010 to 2013 counts |
+
+Two industry checks are defined but not run by any command yet: `industry_known` (every
+listing's industry is an active one) and `universe_classified` (every stock ever in the universe
+has an industry).
 
 ## Changing a threshold
 

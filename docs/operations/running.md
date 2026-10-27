@@ -1,7 +1,8 @@
 # Running the platform
 
-**In short:** put four settings in a `.env` file, run `uv sync`, apply the migrations, then start
-Dagster or run a backfill. The pipeline must run from a machine NSE answers (today, Arush's laptop).
+**In short:** put your settings in a `.env` file, run `uv sync`, apply the migrations, start
+Dagster (or run a backfill), then build listings and bars. The pipeline must run from a machine NSE answers (today,
+Arush's laptop).
 
 ## 1. Settings
 
@@ -48,13 +49,37 @@ uv run dagster dev -m cagr_data.orchestration.definitions    # opens http://loca
 
 Turn the schedules on in the UI. See [NSE daily pipeline](../pipeline/nse-daily.md) for what they do.
 
-## 5. Or load past dates
+To load past dates instead:
 
 ```sh
 DAGSTER_HOME=~/.dagster uv run python -m cagr_data.orchestration.backfill 2024-01-01 2024-12-31
 ```
 
 Run a year at a time. It is safe to rerun.
+
+## 5. Build listings and bars
+
+After new files are in:
+
+```sh
+uv run python -m cagr_data.reference.listing_build
+uv run python -m cagr_data.clean.bars 2026-10-01 2026-10-26
+```
+
+## 6. Decide review items
+
+```sh
+uv run observatory      # the review page on http://localhost:8400
+```
+
+See [Observatory](../observatory/README.md) for building the UI the first time.
+
+## Now and then
+
+| When | Run |
+|---|---|
+| Once, to load Arush's industries | `uv run python -m cagr_data.reference.industry db/seeds/group3_2026-10-27.csv` |
+| Monthly, to pack old raw files into archives | `uv run python -m cagr_data.raw.archive` |
 
 ## Quick checks
 
@@ -65,4 +90,9 @@ SELECT feed_id, count(*), min(partition_date), max(partition_date)
 
 -- latest runs
 SELECT run_id, kind, status, started_at FROM ops.run ORDER BY run_id DESC LIMIT 10;
+
+-- review items waiting
+SELECT 'adjustment', count(*) FROM ref.price_adjustment WHERE status = 'pending'
+UNION ALL
+SELECT 'listing change', count(*) FROM ref.listing_change WHERE status = 'pending';
 ```
