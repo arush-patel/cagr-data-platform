@@ -50,18 +50,21 @@ def record(
     """Write one ops.dq_result row per outcome of an active check. Returns the critical
     failures."""
     critical: list[Outcome] = []
-    with conn.cursor() as cur:
-        for o in outcomes:
-            check = checks.get(o.check_id)
-            if check is None:
-                continue  # inactive
-            cur.execute(
+    rows = []
+    for o in outcomes:
+        check = checks.get(o.check_id)
+        if check is None:
+            continue  # inactive
+        rows.append((run_id, o.check_id, day, o.passed, Jsonb(o.observed), o.detail))
+        if not o.passed and check.severity == "critical":
+            critical.append(o)
+    if rows:
+        with conn.cursor() as cur:  # executemany pipelines the rows: one round trip
+            cur.executemany(
                 "INSERT INTO ops.dq_result (run_id, check_id, partition_date, passed, observed,"
                 " detail) VALUES (%s, %s, %s, %s, %s, %s)",
-                (run_id, o.check_id, day, o.passed, Jsonb(o.observed), o.detail),
+                rows,
             )
-            if not o.passed and check.severity == "critical":
-                critical.append(o)
     return critical
 
 

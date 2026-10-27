@@ -223,3 +223,16 @@ def test_backfill_gives_up_when_the_database_stays_away(
         reachable=lambda: False, wait=lambda ready: False,
     )  # fmt: skip
     assert failures[0].startswith("2024-07-06 files")
+
+
+def test_backfill_skips_other_files_on_days_without_a_bhavcopy(
+    resources: dict[str, object], dagster_db: str
+) -> None:
+    resources = {**resources, "db": PlatformDatabase(url=dagster_db, reuse=True)}
+    backfill(date(2024, 7, 6), date(2024, 7, 8), resources, log=False)
+    index = [p for p in REQUESTS if p.startswith("/content/indices/")]
+    assert index == ["/content/indices/ind_close_all_08072024.csv"]  # not Sat 6 or Sun 7
+
+    REQUESTS.clear()  # a second backfill trusts the 404s it was given days after the date
+    backfill(date(2024, 7, 6), date(2024, 7, 7), resources, log=False)
+    assert [p for p in REQUESTS if p != "/api/holiday-master"] == []

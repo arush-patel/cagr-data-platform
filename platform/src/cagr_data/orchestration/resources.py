@@ -1,21 +1,57 @@
 """Dagster resources: the database, the raw file storage and the NSE client."""
 
 from pathlib import Path
+from types import TracebackType
+from typing import Any
 
 import dagster as dg
+import psycopg
 
 from cagr_data.core.db import Connection, connect
 from cagr_data.core.storage import LocalStorage
 from cagr_data.vendors.http import VendorClient
 
 
+class _KeptConnection(psycopg.Connection[tuple[Any, ...]]):
+    """A connection whose `with` block commits or rolls back but leaves it open."""
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
+        if self.closed:
+            return
+        if exc_type is None:
+            self.commit()
+        elif not self.broken:
+            self.rollback()
+
+
+_KEPT: dict[str, _KeptConnection] = {}
+
+
 class PlatformDatabase(dg.ConfigurableResource["PlatformDatabase"]):
-    """The platform database, connected as the pipeline role (cagr_writer)."""
+    """The platform database, connected as the pipeline role (cagr_writer).
+
+    With reuse, every asset in this process shares one connection, opened again only after it
+    broke. A backfill sets it: over the laptop's tunnel a new connection costs about half a
+    second, and a backfill day opened several.
+    """
 
     url: str
+    reuse: bool = False
 
     def connect(self) -> Connection:
-        return connect(self.url)
+        if not self.reuse:
+            return connect(self.url)
+        conn = _KEPT.get(self.url)
+        if conn is None or conn.closed or conn.broken:
+            if conn is not None:
+                conn.close()
+            conn = _KEPT[self.url] = _KeptConnection.connect(self.url)
+        return conn
 
 
 class RawStorage(dg.ConfigurableResource["RawStorage"]):

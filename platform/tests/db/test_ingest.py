@@ -296,3 +296,27 @@ def test_pr_zip_feeds_load_as_the_writer(
         "file_shape": True, "trade_date_matches": True, "no_duplicates": True,
         "vendor_revision": True,
     }  # fmt: skip
+
+
+def test_archive_packs_a_month_and_reads_back(
+    writer: Conn, storage: LocalStorage, nse_fixtures: Path
+) -> None:
+    from cagr_data.raw.archive import archive
+
+    run_id = start_run(writer, "manual")
+    feed = load_feed(writer, "nse_cm_bhavcopy_udiff")
+    content = (nse_fixtures / UDIFF).read_bytes()
+    first = ingest_file(writer, storage, run_id=run_id, feed=feed, day=UDIFF_DAY,
+                        url=UDIFF_URL, content=content)  # fmt: skip
+    assert first.receipt is not None
+    loose = first.receipt.storage_uri
+
+    # A month too recent to have settled stays loose.
+    assert archive(writer, storage, date(2024, 8, 3)).months == 0
+    result = archive(writer, storage, date(2024, 9, 1), commit=lambda: None)
+    assert (result.months, result.files, result.failed) == (1, 1, [])
+    (uri,) = writer.execute("SELECT storage_uri FROM raw.vendor_file").fetchone() or ()
+    assert str(uri).endswith("raw/nse/nse_cm_bhavcopy_udiff/2024/07.zip#" + UDIFF)
+    assert storage.get(str(uri)) == content
+    assert not Path(unquote(loose.removeprefix("file://"))).exists()
+    assert archive(writer, storage, date(2024, 9, 1)).months == 0  # nothing loose is left
