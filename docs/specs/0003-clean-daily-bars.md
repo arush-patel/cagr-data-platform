@@ -45,9 +45,9 @@ lab sees the same prices as the nightly engine and the Observatory.
 traded.**
 
 - **Which bhavcopy row.** A listing's row that day is the row in its listing series (EQ, BE, BZ,
-  SM, ST, SZ, or the ETF, REIT or InvIT series). T0 rows are never a bar. If a listing has rows
-  in two listing series on one day (the 0002 probe counts how often), the first in that order
-  wins and the bar records which series it came from.
+  SM, ST, SZ, or the ETF, REIT or InvIT series). T0 rows are never a bar. A symbol is never in
+  two of these series on the same day (checked over 2024 to 2026), so there is at most one row.
+  The bar records which series it came from.
 - **No bar when it didn't trade.** A day with no row, or a row with zero volume, has no bar.
   Nothing is carried forward. The toolkit gets sessions from `ref.calendar_session` and sees the
   gap.

@@ -34,10 +34,10 @@ Nothing here changes a price. Spec 0003 applies the factors to build clean bars.
 
 | What | Source | Why now |
 |---|---|---|
-| Listing identity: one `listing_id` per security on NSE, with dated symbols and ISINs | Bhavcopy (every session since 2010), `symbolchange.csv`, `EQUITY_L` and `SME_EQUITY_L` | Every later layer is keyed on it (D4) |
+| Listing identity: one `listing_id` per security on NSE, with dated symbols and ISINs | Bhavcopy (every session since 2010), `symbolchange.csv`, `EQUITY_L`, `SME_EQUITY_L` and NSE's ETF list (new feed) | Every later layer is keyed on it (D4) |
 | Index identity: one `listing_id` per NSE index, with dated names | `ind_close_all`, plus a hand-kept list of renames | Benchmarks and the industry indices need index bars too |
 | Corporate actions, parsed into kind and ratio | NSE corporate-actions API (new feed) | D3 |
-| Price adjustment factors per listing and ex-date | NSE's own adjusted previous close on the ex-date, checked against the parsed action | Spec 0003 needs them to adjust bars |
+| Price adjustment factors per listing and ex-date | The parsed action's ratio, checked against the jump in the close and the ISIN change on the ex-date | Spec 0003 needs them to adjust bars |
 | A review queue for what can't be decided automatically | This spec | D4 and D16: only clear-cut cases apply on their own |
 | The read interface the toolkit uses for listings | This spec, section 9 | Toolkit slice T2 |
 
@@ -87,13 +87,14 @@ Which bhavcopy series make a listing (Q2):
 |---|---|---|
 | EQ, BE, BZ | Main board equity: normal, trade-for-trade, and trade-for-trade for non-compliant companies | Yes, `asset_class = equity`, `board = main` |
 | SM, ST, SZ | SME board (Emerge) | Yes, `asset_class = equity`, `board = sme` |
-| EQ rows of ETFs | Exchange-traded funds trade in EQ | Yes, `asset_class = etf` (from the master's ISIN prefix and name) |
+| EQ rows of ETFs | Exchange-traded funds and fund units trade in EQ. In Oct 2026 they were 355 of 2,750 EQ symbols, all missing from `EQUITY_L` | Yes, `asset_class = etf`: an ISIN starting `INF`, and NSE's ETF list (its URL is confirmed in task 3) |
 | RR, IV | REITs and InvITs | Yes, `asset_class = reit` or `invit` |
 | T0 | Same-day settlement window for stocks that also trade in EQ | No. Its rows belong to the EQ listing but never make its bar (0003) |
 | Bonds, G-secs, T-bills, SGBs, debt series (N*, Y*, Z*, GS, GB, TB and so on) | Debt | No |
 | Rights entitlements (E1, E2 and so on) | Short-lived rights | No. Recorded as part of the rights issue |
 
-The probe (section 10, task 0) confirms the series list from the data we already hold.
+In 2024 to 2026 the bhavcopy has 144 series, but a symbol is never in two of EQ, BE, BZ, SM, ST and
+SZ on the same day, so each listing has at most one row per session ([source check](0002-source-check.md)).
 
 ## 5. How listings are built
 
@@ -117,13 +118,14 @@ For each row (symbol *s*, ISIN *i*) on session *d*:
 1. **Known ISIN.** If *i* belongs to a listing *L*, the row is *L*'s. If *L*'s current symbol is
    not *s*, that's a symbol change on *L* from *d*. It applies automatically, because the ISIN
    proves the identity. If `symbolchange.csv` doesn't confirm it, a warning is raised.
-2. **Known symbol, new ISIN.** If *s* is *L*'s current symbol, *L* traded within the last five
+2. **Known symbol, new ISIN.** If *s* is *L*'s current symbol, *L* traded within the last 20
    sessions, and *L*'s old ISIN is not in today's file, that's an ISIN change on *L* from *d*. It
-   applies automatically. If *L* had been silent for longer, a new listing is created instead,
-   with a review item asking whether to merge (section 7.4).
+   applies automatically. This happens about 70 times a year, almost always on a face-value
+   split, and the old ISIN never comes back. If *L* had been silent for longer, a new listing is
+   created instead, with a review item asking whether to merge (section 7.4).
 3. **Symbol change without an ISIN** (before 22 Jun 2011). If *s* is the new symbol of a
    `symbolchange.csv` entry dated within five sessions of *d*, and the old symbol belongs to a
-   listing that traded within the last five sessions, that's a symbol change on that listing. It
+   listing that traded within the last 20 sessions, that's a symbol change on that listing. It
    applies automatically.
 4. **Anything else is a new listing**, created automatically from *d* with symbol *s* and ISIN
    *i*. A new listing is a fact in the file, so it needs no approval.
@@ -141,10 +143,12 @@ Listings that stopped trading before 22 Jun 2011 keep no ISIN.
 ### 5.4 When a listing stops trading
 
 A listing that disappears from the bhavcopy may be suspended or delisted, and history can't tell
-the two apart (the masters exist only from 27 Oct 2026). So a listing records its
-`first_session` and `last_session`, the first and last days it had a row, and it has no bar on
-days it didn't trade. The status `inactive` means it hasn't traded for 30 sessions and isn't in
-the latest master. If it trades again, it becomes `active` again.
+the two apart (the masters exist only from 27 Oct 2026). Illiquid SME and trade-for-trade
+stocks also go weeks without a trade: 306 symbols had gaps of more than five sessions in 2024 to
+2026. So a listing records its `first_session` and `last_session`, the first and last days it had
+a row, and it has no bar on days it didn't trade. The status `inactive` means it is in none of the
+current masters (equity, SME, ETF) and hasn't traded for 20 sessions. If it trades again, it
+becomes `active` again.
 
 ### 5.5 Indices
 
@@ -209,8 +213,11 @@ A new feed, `nse_corporate_actions`, calls NSE's corporate-actions API for a win
 - **Nightly:** ex-dates from today minus 7 days to today plus 30 days (D3). Actions are announced
   before they take effect, so each one is seen several times before its ex-date. A changed
   response is a new revision, as in spec 0001.
-- **History:** one call per calendar quarter back to 2010, or as far back as NSE goes (the probe
-  checks this).
+- **History:** one call per calendar year from 2010. A full year comes back in one response (2,693
+  rows for 2024), and the window filters on ex-date.
+
+The API needs no cookie, answers with a JSON array, and writes empty values as `"-"`. Ratios and
+amounts appear only in the free-text `subject`.
 
 It follows spec 0001's rules for raw: politeness, receipts, revisions, and the original response
 kept in storage.
@@ -218,37 +225,50 @@ kept in storage.
 ### 7.2 Parsing the subject
 
 NSE describes each action in free text, such as `Bonus 1:1`,
-`Face Value Split (Sub-Division) - From Rs 10/- Per Share To Rs 2/- Per Share`,
-`Rights 1:5 @ Premium Rs 90/-` and `Dividend - Rs 5 Per Share`. A parser with one pattern per kind
+`Face Value Split (Sub-Division) - From Rs10/- Per Share To Re 1/- Per Share`,
+`Rights 6:179 @ Premium Rs 1810/-` and `Dividend - Rs 10 Per Share`. Wording from around 2010
+is abbreviated (`Fv Split Rs.10 To Re.1`, `Bon 1:1/Fv Spl Rs.5tors.2`) and gets its own
+patterns. One subject can hold two actions, which become two rows. A parser with one pattern per kind
 turns the subject into a kind, a ratio, a cash amount and, for rights, an issue price. A subject
 that no pattern matches is stored as `unparsed`, with nothing guessed. Each pattern is tested on
 real subjects collected by the probe.
 
 ### 7.3 Where the factor comes from
 
-**The factor is the one NSE itself used: the previous close it printed on the ex-date divided by
-the actual close of the session before.** On an ex-date NSE adjusts the previous close in the
-bhavcopy (for a 1:1 bonus it prints half the last close), and it doesn't do this for ordinary
-dividends. So the price data proves which days changed the price basis and by how much, and the
-parsed action explains why.
+**The factor comes from the parsed action. The price data confirms it.** NSE doesn't adjust
+anything for us: its `prev_close` on an ex-date is the unadjusted last close (RELIANCE's on
+28 Oct 2024, the day of its 1:1 bonus, was 2655.70 against a close of 1334.35). So the only
+evidence in the bhavcopy is the jump in the close itself, plus the ISIN change that comes with
+most splits.
 
-For every listing on every session:
+The factor multiplies every price before the ex-date:
 
-- `observed_factor = prev_close on d / close on the listing's previous traded session`
-- A day is an **adjustment event** when the observed factor differs from 1 by more than 0.1%
-  and the two prices differ by more than one tick (0.05). The probe sets these thresholds from
-  real data.
+| Kind | Factor |
+|---|---|
+| Split from face value *F₁* to *F₂* | *F₂ / F₁* (Rs 10 to Re 1: 0.1) |
+| Bonus *a*:*b* (*a* new for every *b* held) | *b / (a + b)* (1:1: 0.5; 3:1: 0.25) |
+| Consolidation | *F₂ / F₁* (above 1) |
+| Rights *a*:*b* at issue price *R* (face value plus premium) | *TERP / C*, where *C* is the close before the ex-date and *TERP = (b·C + a·R) / (a + b)* |
+| Demerger, capital reduction | From prices: the ex-date's first price divided by *C*. Always pending, so a person confirms |
+| Dividend, buyback, AGM, interest | No adjustment (Q3). Recorded only |
 
-Then each event and each parsed action with an ex-date that day are matched:
+Each session, for each listing that traded, the step checks the evidence:
+
+- `observed = close on d / close on the listing's previous traded session`
+- A day is a **jump** when `observed` is below 0.75 or above 1.33. That is beyond any price band
+  that applies to the stock, so a normal day can't produce it.
 
 | Case | Result |
 |---|---|
-| Event, and a split, bonus or consolidation whose ratio gives the same factor within 1% | Applied automatically: `factor = observed_factor` |
-| Event, and a rights issue or demerger | Applied automatically with the observed factor, since NSE's adjusted close is the market's own valuation of the entitlement. `expected_factor` holds the theoretical value when the ratio and price are known |
-| Event, matching a clean ratio (1/2, 1/5, 1/10, 2/3 and so on), but no parsed action | Pending: a person confirms. In history (Q5) such cases apply automatically and are marked |
-| Event with no action and no clean ratio | Pending |
-| A price-changing action on its ex-date, but no event | Pending (the action may be wrong, or NSE may not have adjusted) |
-| Dividend, buyback | Recorded in `ref.corporate_action`, no adjustment (Q3) |
+| Split, bonus or consolidation on its ex-date, and `observed / factor` between 0.8 and 1.25 | Applied automatically |
+| Rights issue on its ex-date | Applied automatically with the TERP factor. A rights factor is close to 1, so no jump is expected |
+| Split, bonus or consolidation on its ex-date, but the price disagrees | Pending |
+| A jump near a clean ratio (1/2, 2/3, 1/5, 1/10 and so on) with an ISIN change, and no action | Pending. In history before NSE's announcements are complete, applied automatically and marked (Q5) |
+| Any other jump without an action | Pending (often a re-listing or a series move, and usually rejected) |
+
+In 2024 to 2026, 110 EQ jumps landed on a clean ratio (1/2 29 times, 2/3 29, 1/10 29, 1/5 15).
+The probe also found a ×100 consolidation (KAUSHALYA, 6 Feb 2024) with no announcement, which is
+why a clean-ratio jump with an ISIN change still raises a review item.
 
 ### 7.4 Review
 
@@ -281,7 +301,7 @@ uv run python -m cagr_data.reference.review merge 4021 --into 377 --as arush
 | `listing_rows_mapped` | critical | every bhavcopy row in a listing series maps to exactly one listing |
 | `listing_isin_present` | warn | every active equity listing has an ISIN from 22 Jun 2011 |
 | `symbol_change_confirmed` | warn | each symbol change applied by rule 1 has a matching `symbolchange.csv` row |
-| `master_coverage` | warn | every symbol in the latest `EQUITY_L` and `SME_EQUITY_L` has a listing, and every listing that traded today is in a master |
+| `master_coverage` | warn | every symbol in the latest `EQUITY_L`, `SME_EQUITY_L` and ETF list has a listing, and every listing that traded today is in one of them |
 | `corporate_action_parsed` | warn | every action with an ex-date in the next 3 sessions is parsed |
 | `adjustment_explained` | warn | every adjustment event on this session is applied or pending, never ignored |
 | `review_waiting` | warn | no pending listing change or adjustment is older than 3 sessions |
@@ -308,10 +328,10 @@ Each task is one PR into main.
 
 | # | Task | Output |
 |---|---|---|
-| 0 | Probe: series in our data, ISIN and symbol changes, previous-close jumps, the corporate-actions API (run from the laptop) | `0002-source-check.md`; sets the thresholds in 7.3 and the series list in section 4 |
+| 0 | Probe: series in our data, ISIN and symbol changes, price jumps, the corporate-actions API (run from the laptop) | Done 27 Oct 2026: [`0002-source-check.md`](0002-source-check.md) |
 | 1 | Migration: `ref.listing*` tables, constraints, grants, the index rename seed, the ref checks | Tables in `cagr_test` |
 | 2 | Listing builder (rules 5.2 to 5.5), run over all history from `raw` | Every bhavcopy row since 2010 maps to a listing; the ref checks pass |
-| 3 | Corporate-actions feed and subject parser | `raw.nse_corporate_action` filled since NSE's earliest date; parse rate reported |
+| 3 | Corporate-actions feed, the ETF list feed, and the subject parser | `raw.nse_corporate_action` filled since 2010; parse rate reported |
 | 4 | Adjustment factors and matching (7.3) | `ref.price_adjustment` for all history; pending list reviewed with Arush |
 | 5 | Review command, Dagster assets after the nightly files, read functions and grants | Nightly run keeps listings and adjustments current |
 
@@ -330,7 +350,7 @@ Acceptance in `cagr_test`:
 |---|---|---|
 | Q1 | Is a listing the security (surviving symbol and ISIN changes) rather than the symbol? | Yes. It's what the toolkit expects, and it's the only key that survives renames |
 | Q2 | Which instruments get listings? | Main-board and SME equities, ETFs, REITs, InvITs and indices. No debt, no T0, no rights entitlements |
-| Q3 | Should dividends adjust prices? | No, not in this step. Adjust for capital changes only (splits, bonuses, consolidations, rights, demergers), which matches NSE's own previous close. Dividends are recorded, so a total-return series can come later |
-| Q4 | Should the factor come from NSE's adjusted previous close (7.3) or from the parsed ratio? | NSE's previous close, checked against the ratio. It also covers rights and demergers, which ratios alone don't price |
+| Q3 | Should dividends adjust prices? | No, not in this step. Adjust for capital changes only (splits, bonuses, consolidations, rights, demergers). Dividends are recorded, so a total-return series can come later |
+| Q4 | Should rights issues be adjusted with the theoretical ex-rights price (TERP)? | Yes. It's the standard method, it needs only the ratio and the issue price from the subject, and the change is small (GRASIM's 6:179 rights moved its factor by about 1%) |
 | Q5 | For history, should an unexplained jump that's a clean ratio (1/2, 1/5 and so on) apply without a person? | Yes, marked as automatic, if NSE's announcements don't reach back that far. Otherwise a person would review hundreds of old splits |
 | Q6 | Who reviews pending items, and how often? | Arush, from the command line, after the nightly run. The Observatory review page and Teams cards come with the classification spec |
