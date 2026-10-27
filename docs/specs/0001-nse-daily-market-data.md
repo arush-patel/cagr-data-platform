@@ -132,6 +132,12 @@ The original bytes are kept, so any row can be re-derived and any dispute settle
 
 - Path: `{CAGR_RAW_ROOT}/nse/{feed_id}/{YYYY}/{MM}/{original file name}`, plus `@{sha256 prefix}`
   in the name when a revision arrives.
+- Snapshots (masters, symbol changes) come under a fixed name every day, so the snapshot date
+  goes before the extension (`EQUITY_L_20261027.csv`). The holiday list's partition date is
+  1 Jan of its year, so the weekly refetch of an unchanged list is the same receipt and a changed
+  list is a revision; it is stored as `holiday-master_trading_{YYYY}.json`.
+- A file that fails `file_shape` or `trade_date_matches` gets no receipt and no rows; the
+  failed check result says why, and the next run fetches it again.
 - `CAGR_RAW_ROOT` is a local folder in development and an Azure Blob container once deployed.
   Code goes through one small storage interface so the switch is configuration.
 - Files are write-once. A revision is a new object, never an overwrite.
@@ -308,7 +314,7 @@ cagr-data-platform/
 │       ├── fixtures/nse/       # small real files, trimmed, fetched fresh in task 0
 │       ├── unit/               # parsers, url builders, calendar rules
 │       └── db/                 # scenarios against Postgres 17
-├── db/migrations/              # 0001_ops.sql, 0002_ref_calendar.sql, 0003_raw.sql, 0004_seed_xnse.sql
+├── db/migrations/              # 0001_ops.sql … 0004_seed_xnse.sql, 0005_writer_maintain.sql
 ├── docs/specs/                 # this spec and the ones after it
 └── .github/workflows/ci.yml    # ruff, mypy, pytest with a Postgres 17 service
 ```
@@ -347,7 +353,7 @@ Each task is one short branch and one PR into main.
 | 1 | Repo skeleton | uv workspace, `platform` package, ruff, mypy, pytest, CI with Postgres 17, `docs/` |
 | 2 | Migrations 0001 to 0004 | `ops`, `ref`, `raw` schemas, seeds for venue, vendors, feeds, formats and checks, grants for the three roles |
 | 3 | NSE client and bhavcopy parsers (both formats) | Done 27 Oct 2026 (PR #8) |
-| 4 | Index close, holidays, masters and symbol-change parsers; calendar builder | Tested |
+| 4 | Index close, holidays, masters and symbol-change parsers; calendar builder | Done 27 Oct 2026 (PR #9) |
 | 5 | Receipts, storage, loaders, check runner | DB scenario tests |
 | 6 | Dagster assets, partitions, schedule, asset checks | Runs locally with `dagster dev` |
 | 7 | Backfill Jun to Aug 2024 into `cagr_test`, then the full history | Acceptance results in the PR |

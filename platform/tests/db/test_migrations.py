@@ -17,7 +17,9 @@ def test_all_migrations_apply_then_rerun_is_a_no_op(
     migrated_db: tuple[str, str, list[str]],
 ) -> None:
     url, platform_url, applied = migrated_db
-    assert applied == ["0001_ops", "0002_ref_calendar", "0003_raw", "0004_seed_xnse"]
+    assert applied == [
+        "0001_ops", "0002_ref_calendar", "0003_raw", "0004_seed_xnse", "0005_writer_maintain",
+    ]  # fmt: skip
     with psycopg.connect(url) as conn:
         owner = conn.execute(
             "SELECT pg_get_userbyid(nspowner) FROM pg_namespace WHERE nspname = 'raw'"
