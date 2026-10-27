@@ -26,6 +26,10 @@ from cagr_data.vendors.errors import VendorFileError
 VENUE = "XNSE"
 BAR_KEYS = ("symbol", "series")
 INDEX_KEYS = ("index_name",)
+DUPLICATE_KEYS = {
+    "nse_mcap": ("symbol", "series"),
+    "nse_index_issue_cap": ("source", "index_name", "symbol", "series"),
+}
 
 
 @dataclass(frozen=True)
@@ -87,6 +91,8 @@ def _content_checks(
               if "benchmark_present" in checks else []),
             *_arrival(conn, day),
         ]  # fmt: skip
+    if feed.dataset in DUPLICATE_KEYS:
+        return [qc.no_duplicates(frame, DUPLICATE_KEYS[feed.dataset])]
     return []
 
 

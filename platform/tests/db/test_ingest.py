@@ -270,3 +270,29 @@ def test_writer_may_maintain_the_bar_table(db: Conn) -> None:
         " AND NOT has_table_privilege('cagr_writer', c.oid, 'MAINTAIN')"
     ).fetchall()
     assert rows == []
+
+
+@pytest.mark.parametrize(
+    ("feed_id", "fixture", "day", "table", "rows"),
+    [
+        ("nse_mcap", "PR010224.zip", date(2024, 2, 1), "raw.nse_mcap_current", 6),
+        ("nse_index_issue_cap", "PR040110.zip", date(2010, 1, 4),
+         "raw.nse_index_issue_cap_current", 8),
+    ],
+)  # fmt: skip
+def test_pr_zip_feeds_load_as_the_writer(
+    writer: Conn, storage: LocalStorage, nse_fixtures: Path, feed_id: str, fixture: str,
+    day: date, table: str, rows: int,
+) -> None:  # fmt: skip
+    run_id = start_run(writer, "manual")
+    feed = load_feed(writer, feed_id)
+    content = (nse_fixtures / "pr" / fixture).read_bytes()
+    url = "https://nsearchives.nseindia.com/archives/equities/bhavcopy/pr/" + fixture
+    result = ingest_file(writer, storage, run_id=run_id, feed=feed, day=day, url=url,
+                         content=content)  # fmt: skip
+    assert result.critical == [] and result.rows_loaded == rows
+    assert writer.execute(f"SELECT count(*) FROM {table}").fetchone() == (rows,)
+    assert _results(writer, run_id) == {
+        "file_shape": True, "trade_date_matches": True, "no_duplicates": True,
+        "vendor_revision": True,
+    }  # fmt: skip

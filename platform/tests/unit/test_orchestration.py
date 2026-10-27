@@ -13,7 +13,7 @@ def test_definitions_load() -> None:
     assert keys == {
         "nse_cm_bhavcopy", "nse_index_close", "nse_holidays", "xnse_calendar",
         "nse_equity_list", "nse_sme_equity_list", "nse_symbol_change", "nse_session_complete",
-        "nse_etf_list", "nse_corporate_actions",
+        "nse_etf_list", "nse_corporate_actions", "nse_mcap", "nse_index_issue_cap",
     }  # fmt: skip
 
 

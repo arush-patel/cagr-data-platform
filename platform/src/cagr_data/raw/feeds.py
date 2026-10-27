@@ -14,6 +14,7 @@ from cagr_data.vendors.nse.corporate_actions import parse_response
 from cagr_data.vendors.nse.holidays import parse_holidays
 from cagr_data.vendors.nse.index_close import parse_index_close
 from cagr_data.vendors.nse.listings import parse_equity_list, parse_etf_list, parse_symbol_change
+from cagr_data.vendors.nse.pr import parse_issue_cap, parse_mcap
 
 
 @dataclass(frozen=True)
@@ -51,6 +52,8 @@ FORMATS: dict[str, FormatSpec] = {
     "sme_corporate_actions_v1": FormatSpec(
         "raw.nse_corporate_action", lambda b, d: parse_response(b, "sme")
     ),
+    "pr_mcap_v1": FormatSpec("raw.nse_mcap", parse_mcap),
+    "pr_issue_cap_v1": FormatSpec("raw.nse_index_issue_cap", parse_issue_cap),
 }
 YEARLY_API_FORMATS = frozenset({"corporate_actions_v1", "sme_corporate_actions_v1"})
 

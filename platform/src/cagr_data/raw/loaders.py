@@ -17,6 +17,8 @@ ROW_TABLES = frozenset(
         "raw.nse_symbol_change",
         "raw.nse_etf_list",
         "raw.nse_corporate_action",
+        "raw.nse_mcap",
+        "raw.nse_index_issue_cap",
     }
 )
 PARTITIONED = frozenset({"raw.nse_cm_bar"})
