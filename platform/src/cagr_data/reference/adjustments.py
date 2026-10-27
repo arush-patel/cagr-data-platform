@@ -118,6 +118,9 @@ def decide(event: Event, history_before: date = HISTORY_BEFORE) -> Proposal | No
     if cash and cash / event.close_before >= EXTRAORDINARY:
         expected *= (event.close_before - cash) / event.close_before
         first = first or max(dividends, key=lambda a: a.cash_per_share or 0).action_id
+        if expected <= 0:
+            return Proposal("pending", None, None, first,
+                            "dividend at or above the previous close")  # fmt: skip
 
     if any(a.kind in STRUCTURAL for a in priced):
         if CONFIRM_LOW <= event.observed / expected <= CONFIRM_HIGH:
