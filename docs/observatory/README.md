@@ -42,9 +42,9 @@ refusal, such as deciding an item you proposed (D16) or one already decided, is 
 - **The reason sentence** is written in `cagr_observatory/review/reasons.py`, from what spec 0002
   stored. Nothing is worked out again.
 - **The chart** shows closes 20 sessions either side of the ex-date, on a log scale, unadjusted
-  (dashed) and adjusted by the proposed factor (solid). The closes still come from the raw
-  bhavcopy through the listing's dated symbols, in its listing series and never T0, not yet from
-  `clean.bar_1d_unadjusted`. Switching is one function, `queries.closes_around`.
+  (dashed) and adjusted by the proposed factor (solid). The closes come from spec 0003's
+  `clean.bar_1d_unadjusted`, one bar per listing and session, so a merged listing's history
+  follows it (`queries.closes_around`).
 - An item waiting more than 3 sessions is marked, as the `review_waiting` check warns.
 - Keys `j` and `k` move through the queue, `a` approves and `r` rejects (or moves to the note,
   which a rejection needs). After a decision the next item opens.

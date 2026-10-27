@@ -9,8 +9,6 @@ from cagr.db import Connection
 
 # Sessions an item may wait before the review_waiting check warns (spec 0002, section 8).
 MAX_WAITING_SESSIONS = 3
-# The bhavcopy series that make a listing's bar (spec 0002, section 4). T0 never does.
-LISTING_SERIES = ["EQ", "BE", "BZ", "SM", "ST", "SZ", "RR", "IV"]
 
 Status = Literal["pending", "decided"]
 
@@ -121,11 +119,8 @@ def search_listings(conn: Connection, q: str, limit: int = 20) -> list[dict[str,
 def closes_around(
     conn: Connection, listing_id: int, ex_date: date, sessions: int = 20
 ) -> list[dict[str, Any]]:
-    """The listing's unadjusted closes, `sessions` XNSE sessions either side of ex_date.
-
-    Read from the raw bhavcopy through the listing's dated symbols until spec 0003's
-    clean.bar_1d_unadjusted exists; this is the one function to change then.
-    """
+    """The listing's unadjusted closes, `sessions` XNSE sessions either side of ex_date, from
+    spec 0003's clean.bar_1d_unadjusted (one bar per listing and session, never T0)."""
     return _rows(
         conn,
         """
@@ -140,15 +135,10 @@ def closes_around(
                   ORDER BY date LIMIT %(n)s)
             ) d
         )
-        SELECT b.trade_date AS date, b.close
-          FROM raw.nse_cm_bar_current b
-          JOIN ref.listing_symbol s
-            ON s.symbol = b.symbol AND s.valid_from <= b.trade_date
-           AND (s.valid_to IS NULL OR s.valid_to > b.trade_date)
-          CROSS JOIN window_ w
-         WHERE s.listing_id = %(id)s AND b.series = ANY(%(series)s)
-           AND b.trade_date BETWEEN w.lo AND w.hi AND b.close IS NOT NULL
-         ORDER BY b.trade_date
+        SELECT b.date, b.close
+          FROM clean.bar_1d_unadjusted b CROSS JOIN window_ w
+         WHERE b.listing_id = %(id)s AND b.date BETWEEN w.lo AND w.hi
+         ORDER BY b.date
         """,
-        {"ex": ex_date, "n": sessions, "id": listing_id, "series": LISTING_SERIES},
+        {"ex": ex_date, "n": sessions, "id": listing_id},
     )
