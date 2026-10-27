@@ -29,7 +29,7 @@ SELECT a.adjustment_id AS id, a.listing_id, l.name, l.board, a.ex_date AS date, 
        a.factor, a.expected_factor, a.observed_factor, a.close_before, a.close_on,
        a.proposed_by, a.decided_by, a.decided_at, a.note,
        c.kind AS action_kind, c.subject, c.ratio_new, c.ratio_old, c.cash_per_share,
-       c.issue_price,
+       c.issue_price, c.parse_status,
        (SELECT isin FROM ref.listing_isin
          WHERE listing_id = a.listing_id AND valid_from < a.ex_date
          ORDER BY valid_from DESC LIMIT 1) AS isin_before,
@@ -117,28 +117,41 @@ def search_listings(conn: Connection, q: str, limit: int = 20) -> list[dict[str,
 
 
 def closes_around(
-    conn: Connection, listing_id: int, ex_date: date, sessions: int = 20
+    conn: Connection, listing_id: int, on: date, bars: int = 40
 ) -> list[dict[str, Any]]:
-    """The listing's unadjusted closes, `sessions` XNSE sessions either side of ex_date, from
-    spec 0003's clean.bar_1d_unadjusted (one bar per listing and session, never T0)."""
+    """The listing's own last `bars` unadjusted closes before `on` and first `bars` from it, from
+    spec 0003's clean.bar_1d_unadjusted. Counting the listing's bars, not calendar sessions, keeps
+    both sides on the chart when trading stopped for a while before the date."""
     return _rows(
         conn,
         """
-        WITH window_ AS (
-            SELECT min(date) AS lo, max(date) AS hi FROM (
-                (SELECT date FROM ref.calendar_session
-                  WHERE venue_id = 'XNSE' AND is_session AND date < %(ex)s
-                  ORDER BY date DESC LIMIT %(n)s)
-                UNION ALL
-                (SELECT date FROM ref.calendar_session
-                  WHERE venue_id = 'XNSE' AND is_session AND date >= %(ex)s
-                  ORDER BY date LIMIT %(n)s)
-            ) d
-        )
-        SELECT b.date, b.close
-          FROM clean.bar_1d_unadjusted b CROSS JOIN window_ w
-         WHERE b.listing_id = %(id)s AND b.date BETWEEN w.lo AND w.hi
-         ORDER BY b.date
+        SELECT date, close FROM (
+            (SELECT date, close FROM clean.bar_1d_unadjusted
+              WHERE listing_id = %(id)s AND date < %(on)s ORDER BY date DESC LIMIT %(n)s)
+            UNION ALL
+            (SELECT date, close FROM clean.bar_1d_unadjusted
+              WHERE listing_id = %(id)s AND date >= %(on)s ORDER BY date LIMIT %(n)s)
+        ) b
+        ORDER BY date
         """,
-        {"ex": ex_date, "n": sessions, "id": listing_id},
+        {"id": listing_id, "on": on, "n": bars},
     )
+
+
+def previous_trade(conn: Connection, listing_id: int, on: date) -> tuple[date | None, int | None]:
+    """The listing's last traded session before `on`, and the XNSE sessions in between."""
+    rows = _rows(
+        conn,
+        """
+        SELECT p.date,
+               (SELECT count(*) FROM ref.calendar_session s
+                 WHERE s.venue_id = 'XNSE' AND s.is_session AND s.date > p.date
+                   AND s.date < %(on)s)::int AS silent
+          FROM (SELECT max(date) AS date FROM clean.bar_1d_unadjusted
+                 WHERE listing_id = %(id)s AND date < %(on)s) p
+        """,
+        {"id": listing_id, "on": on},
+    )
+    if not rows or rows[0]["date"] is None:
+        return None, None
+    return rows[0]["date"], rows[0]["silent"]

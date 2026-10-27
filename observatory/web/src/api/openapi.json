@@ -79,12 +79,36 @@
               }
             ]
           },
+          "approve_effect": {
+            "title": "Approve Effect",
+            "type": "string"
+          },
           "bars": {
             "items": {
-              "$ref": "#/components/schemas/Bar"
+              "$ref": "#/components/schemas/Close"
             },
             "title": "Bars",
             "type": "array"
+          },
+          "category": {
+            "enum": [
+              "unexplained_jump",
+              "clean_ratio_jump",
+              "action_disagrees",
+              "missing_ratio",
+              "unparsed",
+              "demerger",
+              "dividend_too_big",
+              "possible_merge",
+              "possible_rename",
+              "other"
+            ],
+            "title": "Category",
+            "type": "string"
+          },
+          "category_label": {
+            "title": "Category Label",
+            "type": "string"
           },
           "chart_factor": {
             "anyOf": [
@@ -169,6 +193,10 @@
             ],
             "title": "Factor"
           },
+          "guide": {
+            "title": "Guide",
+            "type": "string"
+          },
           "id": {
             "title": "Id",
             "type": "integer"
@@ -244,6 +272,18 @@
             "title": "Overdue",
             "type": "boolean"
           },
+          "previous_trade": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous Trade"
+          },
           "proposed_by": {
             "title": "Proposed By",
             "type": "string"
@@ -251,6 +291,21 @@
           "reason": {
             "title": "Reason",
             "type": "string"
+          },
+          "reject_effect": {
+            "title": "Reject Effect",
+            "type": "string"
+          },
+          "silent_sessions": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Silent Sessions"
           },
           "status": {
             "enum": [
@@ -288,6 +343,8 @@
           "symbol",
           "name",
           "date",
+          "category",
+          "category_label",
           "title",
           "reason",
           "status",
@@ -297,12 +354,17 @@
           "note",
           "waiting_sessions",
           "overdue",
+          "guide",
+          "approve_effect",
+          "reject_effect",
           "factor",
           "expected_factor",
           "observed_factor",
           "chart_factor",
           "close_before",
           "close_on",
+          "previous_trade",
+          "silent_sessions",
           "isin_before",
           "isin_on",
           "action",
@@ -339,32 +401,32 @@
         "title": "Approve",
         "type": "object"
       },
-      "Bar": {
-        "properties": {
-          "adjusted": {
-            "title": "Adjusted",
-            "type": "number"
-          },
-          "close": {
-            "title": "Close",
-            "type": "number"
-          },
-          "date": {
-            "format": "date",
-            "title": "Date",
-            "type": "string"
-          }
-        },
-        "required": [
-          "date",
-          "close",
-          "adjusted"
-        ],
-        "title": "Bar",
-        "type": "object"
-      },
       "ChangeDetail": {
         "properties": {
+          "approve_effect": {
+            "title": "Approve Effect",
+            "type": "string"
+          },
+          "category": {
+            "enum": [
+              "unexplained_jump",
+              "clean_ratio_jump",
+              "action_disagrees",
+              "missing_ratio",
+              "unparsed",
+              "demerger",
+              "dividend_too_big",
+              "possible_merge",
+              "possible_rename",
+              "other"
+            ],
+            "title": "Category",
+            "type": "string"
+          },
+          "category_label": {
+            "title": "Category Label",
+            "type": "string"
+          },
           "change_kind": {
             "title": "Change Kind",
             "type": "string"
@@ -401,6 +463,10 @@
             "additionalProperties": true,
             "title": "Evidence",
             "type": "object"
+          },
+          "guide": {
+            "title": "Guide",
+            "type": "string"
           },
           "id": {
             "title": "Id",
@@ -464,6 +530,17 @@
             "title": "Reason",
             "type": "string"
           },
+          "reject_effect": {
+            "title": "Reject Effect",
+            "type": "string"
+          },
+          "series": {
+            "items": {
+              "$ref": "#/components/schemas/Series"
+            },
+            "title": "Series",
+            "type": "array"
+          },
           "status": {
             "enum": [
               "pending",
@@ -500,6 +577,8 @@
           "symbol",
           "name",
           "date",
+          "category",
+          "category_label",
           "title",
           "reason",
           "status",
@@ -509,12 +588,35 @@
           "note",
           "waiting_sessions",
           "overdue",
+          "guide",
+          "approve_effect",
+          "reject_effect",
           "change_kind",
           "payload",
           "evidence",
-          "listings"
+          "listings",
+          "series"
         ],
         "title": "ChangeDetail",
+        "type": "object"
+      },
+      "Close": {
+        "properties": {
+          "close": {
+            "title": "Close",
+            "type": "number"
+          },
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "date",
+          "close"
+        ],
+        "title": "Close",
         "type": "object"
       },
       "HTTPValidationError": {
@@ -573,6 +675,26 @@
       "Item": {
         "description": "One row of the queue or the history.",
         "properties": {
+          "category": {
+            "enum": [
+              "unexplained_jump",
+              "clean_ratio_jump",
+              "action_disagrees",
+              "missing_ratio",
+              "unparsed",
+              "demerger",
+              "dividend_too_big",
+              "possible_merge",
+              "possible_rename",
+              "other"
+            ],
+            "title": "Category",
+            "type": "string"
+          },
+          "category_label": {
+            "title": "Category Label",
+            "type": "string"
+          },
           "date": {
             "format": "date",
             "title": "Date",
@@ -687,6 +809,8 @@
           "symbol",
           "name",
           "date",
+          "category",
+          "category_label",
           "title",
           "reason",
           "status",
@@ -795,6 +919,40 @@
           "note"
         ],
         "title": "Reject",
+        "type": "object"
+      },
+      "Series": {
+        "description": "One listing's unadjusted closes around a date, for a chart.",
+        "properties": {
+          "closes": {
+            "items": {
+              "$ref": "#/components/schemas/Close"
+            },
+            "title": "Closes",
+            "type": "array"
+          },
+          "listing_id": {
+            "title": "Listing Id",
+            "type": "integer"
+          },
+          "symbol": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Symbol"
+          }
+        },
+        "required": [
+          "listing_id",
+          "symbol",
+          "closes"
+        ],
+        "title": "Series",
         "type": "object"
       },
       "ValidationError": {

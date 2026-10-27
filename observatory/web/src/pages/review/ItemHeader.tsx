@@ -5,6 +5,7 @@ import { formatDate, sessions } from "../../format";
 export function ItemHeader({ item, dateLabel }: { item: Item; dateLabel: string }) {
   return (
     <header className="item-header">
+      <p className="tag">{item.category_label}</p>
       <h2>
         {item.symbol ?? `Listing ${item.listing_id}`} · {item.title}
       </h2>
@@ -25,7 +26,10 @@ export function ItemHeader({ item, dateLabel }: { item: Item; dateLabel: string 
         <p className="warning">Waiting longer than 3 sessions. The nightly check warns until it is decided.</p>
       )}
       <p className="reason">{item.reason}</p>
-      {item.note && <p className="note">Note: {item.note}</p>}
+      {/* A waiting rule item's note is the rule's own, which the tag already says. */}
+      {item.note && !(item.status === "pending" && item.proposed_by === "rules") && (
+        <p className="note">Note: {item.note}</p>
+      )}
     </header>
   );
 }

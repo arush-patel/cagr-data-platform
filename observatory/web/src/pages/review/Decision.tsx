@@ -6,6 +6,9 @@ import { approve, getHealth, type Item, type Listing, reject } from "../../api/c
 type Props = {
   item: Item;
   approveLabel: string;
+  /** What approving and rejecting write, in words. */
+  approveEffect?: string;
+  rejectEffect?: string;
   /** For a possible index rename: the listings it may rename, one of which approval needs. */
   choices?: Listing[];
   onDecided: (item: Item) => void;
@@ -13,7 +16,7 @@ type Props = {
 
 // Approve or reject (spec 0005, section 4.3). A note is optional to approve and required to
 // reject, so the history explains itself. Keys: a approves, r rejects (or moves to the note).
-export function Decision({ item, approveLabel, choices, onDecided }: Props) {
+export function Decision({ item, approveLabel, approveEffect, rejectEffect, choices, onDecided }: Props) {
   const queryClient = useQueryClient();
   const { data: health } = useQuery({ queryKey: ["health"], queryFn: getHealth });
   const [note, setNote] = useState("");
@@ -76,6 +79,22 @@ export function Decision({ item, approveLabel, choices, onDecided }: Props) {
             </label>
           ))}
         </fieldset>
+      )}
+      {(approveEffect || rejectEffect) && (
+        <dl className="effects">
+          {approveEffect && (
+            <>
+              <dt>Approve</dt>
+              <dd>{approveEffect}</dd>
+            </>
+          )}
+          {rejectEffect && (
+            <>
+              <dt>Reject</dt>
+              <dd>{rejectEffect}</dd>
+            </>
+          )}
+        </dl>
       )}
       <label className="note-field">
         Note {health?.reviewer && <span className="hint">(deciding as {health.reviewer})</span>}

@@ -1,9 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { getChange, type Item } from "../../api/client";
+import { LineChart } from "../../components/LineChart";
 import { formatDate } from "../../format";
 import { Decision } from "./Decision";
+import { Explainer } from "./Explainer";
 import { ItemHeader } from "./ItemHeader";
+
+// The listing the change is on, then each candidate.
+const COLORS = ["var(--accent)", "var(--series-2)", "var(--series-3)", "var(--series-4)", "var(--series-5)"];
 
 const EVIDENCE_LABELS: Record<string, string> = {
   rule: "Rule",
@@ -59,6 +64,13 @@ export function ChangeView({ id, onDecided }: { id: number; onDecided: (item: It
       : isRename
         ? "Approve: it is a rename"
         : "Approve";
+  const lines = item.series
+    .filter((s) => s.closes.length > 0)
+    .map((s) => ({
+      label: `${s.symbol ?? `Listing ${s.listing_id}`}${s.listing_id === item.listing_id ? " (new)" : ""}`,
+      color: COLORS[item.series.indexOf(s) % COLORS.length],
+      points: s.closes.map((c) => ({ date: c.date, value: c.close })),
+    }));
   return (
     <article>
       <ItemHeader item={item} dateLabel="from" />
@@ -103,10 +115,22 @@ export function ChangeView({ id, onDecided }: { id: number; onDecided: (item: It
           </div>
         ))}
       </dl>
+      <Explainer guide={item.guide} />
+      <h3 className="chart-title">{isRename ? "The new index and the ones that stopped" : "Both listings' closes"}</h3>
+      <p className="hint">
+        The last 40 sessions each listing traded before {formatDate(item.date)} and the first 40 from it, as traded.
+      </p>
+      {lines.length > 0 ? (
+        <LineChart lines={lines} mark={{ date: item.date, label: formatDate(item.date) }} />
+      ) : (
+        <p className="empty">None of these listings has closes around {formatDate(item.date)}.</p>
+      )}
       <Decision
         key={item.id}
         item={item}
         approveLabel={approveLabel}
+        approveEffect={item.approve_effect}
+        rejectEffect={item.reject_effect}
         choices={isRename ? others : undefined}
         onDecided={onDecided}
       />

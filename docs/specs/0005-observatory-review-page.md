@@ -99,6 +99,12 @@ When this step is done:
 | Listing change (new ISIN on an old symbol, unknown index name) | Old and new values, the rule that stopped, the file and the `symbolchange.csv` row | None. A small table of each side's last and first sessions |
 | Merge suggestion | The two listings side by side: symbols, ISINs, first and last sessions, gap in sessions | None |
 
+Changed after the first real queue (27 Oct 2026, about 4,000 items): every item also says how to
+decide its kind and what approve and reject write; listing changes get a chart of each listing's
+closes; the queue gets a type filter, sort and search; and the chart counts the listing's own
+bars, so a halt before the ex-date doesn't empty one side. The kinds are listed in
+[docs/observatory](../observatory/README.md#the-kinds-of-item).
+
 ### 4.3 Decisions
 
 | Button | What happens |
@@ -179,7 +185,7 @@ observatory/
 | FastAPI, Pydantic | Typed, small, and its OpenAPI schema generates the UI's types |
 | React, TypeScript, Vite | Decided earlier. Vite needs no configuration to start |
 | TanStack Query | Fetching, caching and refetch after a decision, without a state library |
-| Lightweight Charts (TradingView, open source) | One small library that draws lines now and candles for later pages |
+| A small SVG line chart of our own (`components/LineChart.tsx`) | Lightweight Charts was tried first and dropped on 27 Oct 2026: a log scale, a marked date and labelled lines are simpler to get right in SVG. A charting library can come back for the candle pages |
 | Plain CSS with variables | Few styles, light and dark themes, no framework to learn |
 | npm | Ships with Node; one lock file in `observatory/web` |
 

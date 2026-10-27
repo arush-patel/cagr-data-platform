@@ -3,9 +3,6 @@ import { fireEvent, screen } from "@testing-library/react";
 import type { AdjustmentDetail, ChangeDetail, Item } from "../../api/client";
 import { refused, renderApp } from "../../test-utils";
 
-// The chart draws on a canvas, which jsdom doesn't have.
-vi.mock("./PriceChart", () => ({ PriceChart: () => <div>chart</div> }));
-
 const base = {
   proposed_by: "rules",
   decided_by: null,
@@ -17,6 +14,8 @@ const base = {
 const jump: Item = {
   ...base,
   kind: "adjustment",
+  category: "unexplained_jump",
+  category_label: "Jump nothing explains",
   id: 7,
   listing_id: 1,
   symbol: "KAUSH",
@@ -31,6 +30,8 @@ const jump: Item = {
 const merge: Item = {
   ...base,
   kind: "change",
+  category: "possible_merge",
+  category_label: "Possible merge",
   id: 3,
   listing_id: 9,
   symbol: "NEWCO",
@@ -42,8 +43,13 @@ const merge: Item = {
   overdue: false,
 };
 
+const explained = { guide: "Look at the price.", approve_effect: "Closes are multiplied.", reject_effect: "Kept." };
+
 const jumpDetail: AdjustmentDetail = {
   ...jump,
+  ...explained,
+  previous_trade: "2024-01-04",
+  silent_sessions: 21,
   factor: 100,
   expected_factor: null,
   observed_factor: 99.64,
@@ -53,11 +59,16 @@ const jumpDetail: AdjustmentDetail = {
   isin_before: "INE000K01011",
   isin_on: "INE000K01029",
   action: null,
-  bars: [{ date: "2024-02-05", close: 0.42, adjusted: 42 }],
+  bars: [
+    { date: "2024-01-04", close: 0.42 },
+    { date: "2024-02-06", close: 41.85 },
+  ],
 };
 
 const mergeDetail: ChangeDetail = {
   ...merge,
+  ...explained,
+  series: [{ listing_id: 9, symbol: "NEWCO", closes: [{ date: "2024-03-01", close: 10 }] }],
   change_kind: "merge",
   payload: { merged_id: 9, into_id: 2 },
   evidence: { rule: "5.2.2", candidates: [2] },
@@ -94,21 +105,39 @@ const responses = {
   "/api/review/items/change/3": mergeDetail,
 };
 
-test("the queue groups items and marks the overdue ones", async () => {
+test("the queue sorts by date, filters by type and marks the overdue ones", async () => {
   renderApp("/review", responses);
-  expect(await screen.findByText("Price adjustments (1)")).toBeInTheDocument();
-  expect(screen.getByText("Listing changes (1)")).toBeInTheDocument();
+  const rows = async () => (await screen.findAllByRole("button", { name: /KAUSH|NEWCO/ })).map((b) => b.textContent);
+  expect(await rows()).toEqual([expect.stringContaining("NEWCO"), expect.stringContaining("KAUSH")]);
   expect(screen.getByText("5 sessions")).toHaveClass("overdue");
   expect(screen.getByText("1 session")).not.toHaveClass("overdue");
+
+  fireEvent.change(screen.getByLabelText("Sort"), { target: { value: "oldest" } });
+  expect(await rows()).toEqual([expect.stringContaining("KAUSH"), expect.stringContaining("NEWCO")]);
+
+  const type = screen.getByLabelText("Type");
+  expect(screen.getByRole("option", { name: "Possible merge (1)" })).toBeInTheDocument();
+  fireEvent.change(type, { target: { value: "possible_merge" } });
+  expect(await rows()).toEqual([expect.stringContaining("NEWCO")]);
+  expect(screen.getByText("Showing 1 of 2")).toBeInTheDocument();
+});
+
+test("the search narrows the queue by symbol", async () => {
+  renderApp("/review", responses);
+  fireEvent.change(await screen.findByLabelText("Symbol or name"), { target: { value: "kaus" } });
+  expect(await screen.findByText("Showing 1 of 2")).toBeInTheDocument();
 });
 
 test("an adjustment shows its reason, numbers and chart", async () => {
   renderApp("/review", responses);
   fireEvent.click(await screen.findByRole("button", { name: /KAUSH/ }));
   expect(await screen.findByText(jump.reason)).toBeInTheDocument();
-  expect(screen.getByText("INE000K01011 → INE000K01029")).toBeInTheDocument();
+  expect(screen.getByText("INE000K01011 → INE000K01029 (changed)")).toBeInTheDocument();
+  expect(screen.getByText(/21 sessions without a trade before the ex-date/)).toBeInTheDocument();
   expect(screen.getByText(/Waiting longer than 3 sessions/)).toBeInTheDocument();
-  expect(screen.getByText("chart")).toBeInTheDocument();
+  expect(screen.getByText("Look at the price.")).toBeInTheDocument();
+  expect(screen.getByText("Closes are multiplied.")).toBeInTheDocument();
+  expect(screen.getByRole("img", { name: "Closes around 06 Feb 2024" })).toBeInTheDocument();
 });
 
 test("a possible merge shows both listings", async () => {
@@ -116,13 +145,14 @@ test("a possible merge shows both listings", async () => {
   expect(await screen.findByText(merge.reason)).toBeInTheDocument();
   expect(screen.getByRole("cell", { name: "OLDCO" })).toBeInTheDocument();
   expect(screen.getByText("OLDCO (listing 2)")).toBeInTheDocument();
+  expect(screen.getByRole("img", { name: "Closes around 01 Mar 2024" })).toBeInTheDocument();
 });
 
 test("j moves to the next item", async () => {
-  renderApp("/review/adjustment/7", responses);
-  await screen.findByText(jump.reason);
+  renderApp("/review/change/3", responses);
+  await screen.findByText(merge.reason);
   fireEvent.keyDown(window, { key: "j" });
-  expect(await screen.findByText(merge.reason)).toBeInTheDocument();
+  expect(await screen.findByText(jump.reason)).toBeInTheDocument();
 });
 
 test("approve records the decision and opens the next item", async () => {
@@ -130,7 +160,7 @@ test("approve records the decision and opens the next item", async () => {
     ...responses,
     "POST /api/review/items/adjustment/7/approve": { ...jump, status: "applied", decided_by: "arush" },
   });
-  fireEvent.click(await screen.findByRole("button", { name: "Approve factor 100" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Approve ×100" }));
   expect(await screen.findByText(merge.reason)).toBeInTheDocument();
   const post = fetch.mock.calls.find(([, init]) => init?.method === "POST");
   expect(JSON.parse(String(post?.[1]?.body))).toEqual({ note: null, into_id: null });
