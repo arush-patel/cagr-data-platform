@@ -19,7 +19,7 @@ def test_all_migrations_apply_then_rerun_is_a_no_op(
     url, platform_url, applied = migrated_db
     assert applied == [
         "0001_ops", "0002_ref_calendar", "0003_raw", "0004_seed_xnse", "0005_writer_maintain",
-        "0006_ohlc_t0", "0007_ref_listings",
+        "0006_ohlc_t0", "0007_ref_listings", "0008_reviewer",
     ]  # fmt: skip
     with psycopg.connect(url) as conn:
         owner = conn.execute(

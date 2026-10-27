@@ -46,7 +46,9 @@ def create_migrated(admin_url: str, name: str) -> tuple[str, str, list[str]]:
     Returns its admin URL, the owner's (cagr_platform) URL and the migration ids applied.
     """
     with psycopg.connect(admin_url, autocommit=True) as conn:
-        for role, login in (("cagr_platform", True), ("cagr_writer", False), ("cagr_read", False)):
+        roles = (("cagr_platform", True), ("cagr_writer", False), ("cagr_read", False),
+                 ("cagr_reviewer", False))  # fmt: skip
+        for role, login in roles:
             exists = conn.execute("SELECT 1 FROM pg_roles WHERE rolname = %s", (role,)).fetchone()
             if not exists:
                 conn.execute(sql.SQL("CREATE ROLE {} NOLOGIN").format(sql.Identifier(role)))

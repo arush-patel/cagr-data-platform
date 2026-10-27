@@ -11,6 +11,8 @@ Create `.env` in the repository root. It is never committed.
 CAGR_DATABASE_URL=postgresql://cagr_platform:...@localhost:5438/cagr_test?sslmode=require
 CAGR_PIPELINE_DATABASE_URL=postgresql://cagr_writer:...@localhost:5438/cagr_test?sslmode=require
 CAGR_READ_DATABASE_URL=postgresql://cagr_read:...@localhost:5438/cagr_test?sslmode=require
+CAGR_REVIEW_DATABASE_URL=postgresql://cagr_reviewer:...@localhost:5438/cagr_test?sslmode=require
+CAGR_REVIEWER=arush
 CAGR_RAW_ROOT=/path/to/cagr-data/raw
 ```
 
@@ -19,6 +21,8 @@ CAGR_RAW_ROOT=/path/to/cagr-data/raw
 | `CAGR_DATABASE_URL` | Migrations only (owner login) |
 | `CAGR_PIPELINE_DATABASE_URL` | The pipeline (writer login) |
 | `CAGR_READ_DATABASE_URL` | The toolkit (read-only login) |
+| `CAGR_REVIEW_DATABASE_URL` | The Observatory's review decisions (reviewer login) |
+| `CAGR_REVIEWER` | Your name, recorded on each decision you make on the review page |
 | `CAGR_RAW_ROOT` | Folder where original NSE files are saved |
 
 Write a `@` in a password as `%40`.

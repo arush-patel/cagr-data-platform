@@ -124,12 +124,34 @@ def _fill(conn: psycopg.Connection[Any]) -> dict[str, int]:
     )
     merge = _one(
         conn,
-        "INSERT INTO ref.listing_change (kind, listing_id, effective_date, evidence, status,"
-        " auto, proposed_by, created_at) VALUES ('new_listing', %s, '2024-03-01', %s,"
+        "INSERT INTO ref.listing_change (kind, listing_id, effective_date, payload, evidence,"
+        " status, auto, proposed_by, created_at) VALUES ('merge', %s, '2024-03-01', %s, %s,"
         " 'pending', false, 'rules', '2024-03-01') RETURNING change_id",
-        (new, Jsonb({"rule": "5.2.2", "session": "2024-03-01", "candidates": [old]})),
+        (
+            new,
+            Jsonb({"merged_id": new, "into_id": old}),
+            Jsonb({"rule": "5.2.2", "session": "2024-03-01", "candidates": [old]}),
+        ),
     )
-    return {"kaush": kaush, "old": old, "new": new, "jump": jump, "bonus": bonus, "merge": merge}
+    mine = _one(
+        conn,
+        "INSERT INTO ref.price_adjustment (listing_id, ex_date, factor, status, auto,"
+        " proposed_by, created_at) VALUES (%s, '2024-03-15', 0.5, 'pending', false, 'arush',"
+        " '2024-03-15') RETURNING adjustment_id",
+        (old,),
+    )
+    other = _one(
+        conn,
+        "INSERT INTO ref.price_adjustment (listing_id, ex_date, observed_factor, status, auto,"
+        " proposed_by, created_at) VALUES (%s, '2024-03-20', 0.7, 'pending', false, 'rules',"
+        " '2024-03-20') RETURNING adjustment_id",
+        (kaush,),
+    )
+    return {
+        "other": other,
+        "kaush": kaush, "old": old, "new": new, "jump": jump, "bonus": bonus, "merge": merge,
+        "mine": mine,
+    }  # fmt: skip
 
 
 @pytest.fixture(scope="module")
@@ -143,7 +165,9 @@ def admin() -> str:
 @pytest.fixture(scope="module")
 def ids(admin: str) -> dict[str, int]:
     with psycopg.connect(admin, autocommit=True) as conn:
-        for role, login in (("cagr_platform", True), ("cagr_writer", False), ("cagr_read", False)):
+        roles = (("cagr_platform", True), ("cagr_writer", False), ("cagr_read", False),
+                 ("cagr_reviewer", False))  # fmt: skip
+        for role, login in roles:
             if not conn.execute("SELECT 1 FROM pg_roles WHERE rolname = %s", (role,)).fetchone():
                 conn.execute(sql.SQL("CREATE ROLE {} NOLOGIN").format(sql.Identifier(role)))
             if login:
@@ -174,8 +198,15 @@ def client(
         conn.execute("SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY")
         return conn
 
+    def connect_review() -> Connection:
+        conn = psycopg.connect(_url(admin))
+        conn.execute("SET ROLE cagr_reviewer")  # decide with exactly migration 0008's grants
+        return conn
+
     dist = Path(tmp_path_factory.mktemp("none")) / "dist"
-    with TestClient(create_app(Settings(web_dist=dist), connect=connect)) as c:
+    settings = Settings(web_dist=dist, reviewer="arush")
+    app = create_app(settings, connect=connect, connect_review=connect_review)
+    with TestClient(app) as c:
         yield c
 
 
@@ -184,8 +215,10 @@ def test_queue_lists_pending_items_oldest_first(client: TestClient, ids: dict[st
     assert [(i["kind"], i["id"]) for i in items] == [
         ("adjustment", ids["jump"]),
         ("change", ids["merge"]),
+        ("adjustment", ids["mine"]),
+        ("adjustment", ids["other"]),
     ]
-    jump, merge = items
+    jump, merge, _, _ = items
     assert jump["symbol"] == "KAUSH" and jump["title"].startswith("Unexplained jump")
     assert "The ISIN changed" in jump["reason"]
     assert jump["waiting_sessions"] == 38 and jump["overdue"] is True
@@ -232,3 +265,63 @@ def test_listing_search(client: TestClient) -> None:
         client.get("/api/listings/search", params={"q": "INE000A01011"}).json()[0]["symbol"]
         == "OLDCO"
     )
+
+
+# Decisions change the shared fixture, so they come last.
+
+
+def test_health_names_the_reviewer(client: TestClient) -> None:
+    assert client.get("/api/health").json()["reviewer"] == "arush"
+
+
+def test_reject_needs_a_note(client: TestClient, ids: dict[str, int]) -> None:
+    url = f"/api/review/items/adjustment/{ids['jump']}/reject"
+    assert client.post(url, json={"note": ""}).status_code == 422
+
+
+def test_nobody_decides_their_own_item(client: TestClient, ids: dict[str, int]) -> None:
+    response = client.post(f"/api/review/items/adjustment/{ids['mine']}/approve", json={})
+    assert response.status_code == 409
+    assert response.json()["detail"] == "arush proposed this item, so someone else has to decide it"
+
+
+def test_approve_an_adjustment(client: TestClient, ids: dict[str, int]) -> None:
+    url = f"/api/review/items/adjustment/{ids['jump']}/approve"
+    item = client.post(url, json={"note": "x100 consolidation"}).json()
+    assert (item["status"], item["decided_by"], item["note"]) == (
+        "applied", "arush", "x100 consolidation"
+    )  # fmt: skip
+    again = client.post(url, json={})
+    assert again.status_code == 409 and "already applied" in again.json()["detail"]
+
+
+def test_approve_a_merge(client: TestClient, admin: str, ids: dict[str, int]) -> None:
+    item = client.post(f"/api/review/items/change/{ids['merge']}/approve", json={}).json()
+    assert item["status"] == "applied" and item["title"] == "Merge"
+    with psycopg.connect(_url(admin)) as conn:
+        row = conn.execute(
+            "SELECT status, merged_into FROM ref.listing WHERE listing_id = %s", (ids["new"],)
+        ).fetchone()
+    assert row == ("merged", ids["old"])
+    decided = client.get("/api/review/items", params={"status": "decided"}).json()
+    assert [i["id"] for i in decided][:2] == [ids["merge"], ids["jump"]]
+
+
+def test_reject_an_item(client: TestClient, ids: dict[str, int]) -> None:
+    url = f"/api/review/items/adjustment/{ids['other']}/reject"
+    item = client.post(url, json={"note": "a series move"}).json()
+    assert (item["status"], item["decided_by"], item["note"]) == (
+        "rejected", "arush", "a series move"
+    )  # fmt: skip
+    pending = client.get("/api/review/items").json()
+    assert [i["id"] for i in pending] == [ids["mine"]]  # only the one arush can't decide
+
+
+def test_without_a_reviewer_the_page_only_reads(admin: str, tmp_path: Path) -> None:
+    def connect() -> Connection:
+        return psycopg.connect(_url(admin), autocommit=True)
+
+    app = create_app(Settings(web_dist=tmp_path / "none"), connect=connect)
+    with TestClient(app) as c:
+        assert c.get("/api/health").json()["reviewer"] is None
+        assert c.post("/api/review/items/adjustment/1/approve", json={}).status_code == 404

@@ -89,6 +89,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/review/items/{kind}/{item_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve */
+        post: operations["approve_api_review_items__kind___item_id__approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/review/items/{kind}/{item_id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reject */
+        post: operations["reject_api_review_items__kind___item_id__reject_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -169,6 +203,13 @@ export interface components {
             /** Waiting Sessions */
             waiting_sessions: number;
         };
+        /** Approve */
+        Approve: {
+            /** Into Id */
+            into_id?: number | null;
+            /** Note */
+            note?: string | null;
+        };
         /** Bar */
         Bar: {
             /** Adjusted */
@@ -246,6 +287,8 @@ export interface components {
             database: boolean;
             /** Detail */
             detail?: string | null;
+            /** Reviewer */
+            reviewer?: string | null;
             /** Version */
             version: string;
         };
@@ -320,6 +363,11 @@ export interface components {
             status: string;
             /** Symbol */
             symbol: string | null;
+        };
+        /** Reject */
+        Reject: {
+            /** Note */
+            note: string;
         };
         /** ValidationError */
         ValidationError: {
@@ -474,6 +522,78 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ChangeDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    approve_api_review_items__kind___item_id__approve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: "adjustment" | "change";
+                item_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Approve"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Item"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reject_api_review_items__kind___item_id__reject_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: "adjustment" | "change";
+                item_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Reject"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Item"];
                 };
             };
             /** @description Validation Error */

@@ -83,6 +83,11 @@ Query the views, not the tables, unless you need every version.
 
 `cagr_platform` owns everything and is used only for migrations.
 
+`cagr_reviewer` is the Observatory's review page. It reads the review tables and can only record
+a decision on a pending item: the decision columns of `ref.listing_change` and
+`ref.price_adjustment`, and the columns an approved merge changes in `ref.listing`,
+`ref.listing_symbol` and `ref.listing_isin`. It can't add or delete rows anywhere.
+
 ## Migrations
 
 | File | Does |
@@ -93,5 +98,6 @@ Query the views, not the tables, unless you need every version.
 | `0004_seed_xnse.sql` | Adds NSE, its seven feeds and the twelve checks |
 | `0005_writer_maintain.sql` | Lets the pipeline refresh statistics on `nse_cm_bar` after a load |
 | `0006_ohlc_t0.sql` | Relaxes one check for series T0 |
+| `0008_reviewer.sql` | Grants `cagr_reviewer` what the review page needs to record decisions |
 
 Never edit a migration that has run. Make a new one instead.
