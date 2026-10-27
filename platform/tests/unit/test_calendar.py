@@ -131,3 +131,12 @@ def test_archive_proof_ignores_misses_outside_the_files() -> None:
     mon = date(2010, 1, 4)
     assert archive_exceptions([mon], [mon - timedelta(3), mon + timedelta(1)], WEEKEND) == []
     assert archive_exceptions([], [mon], WEEKEND) == []
+
+
+def test_archive_proof_from_a_known_start() -> None:
+    # The archive starts on 1 Jan 2010; that Friday has no file, so it was a holiday.
+    fri, mon = date(2010, 1, 1), date(2010, 1, 4)
+    assert archive_exceptions([mon], [fri], WEEKEND, since=fri) == [
+        CalendarException(fri, "holiday", "archive_proof")
+    ]
+    assert archive_exceptions([mon], [fri - timedelta(1)], WEEKEND, since=fri) == []
