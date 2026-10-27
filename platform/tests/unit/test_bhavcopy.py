@@ -134,3 +134,13 @@ def test_a_last_price_of_zero_is_missing() -> None:
     rows = ["A,NT,100,100,100,100,0,100,1,100,05-JUL-2024,", "B,EQ,1,2,1,2,2,1,10,20,05-JUL-2024,"]
     frame = parse_legacy("\n".join([header, *rows, ""]).encode())
     assert frame["last"].to_list() == [None, Decimal("2.0000")]
+
+
+def test_a_placeholder_isin_is_missing() -> None:
+    # 16 Feb 2021: the partly-paid rights shares (series E1) carry DUMMY for their ISIN.
+    header = ("SYMBOL,SERIES,OPEN,HIGH,LOW,CLOSE,LAST,PREVCLOSE,TOTTRDQTY,TOTTRDVAL,TIMESTAMP,"
+              "TOTALTRADES,ISIN,")  # fmt: skip
+    rows = ["ABFRLPP1,E1,135.1,136,133.1,135.5,133.1,139.4,20362,2749956.3,16-FEB-2021,29,DUMMY,",
+            "ABFRL,EQ,1,2,1,2,2,1,10,20,16-FEB-2021,5,INE647O01011,"]  # fmt: skip
+    frame = parse_legacy("\n".join([header, *rows, ""]).encode(), date(2021, 2, 16))
+    assert frame["isin"].to_list() == [None, "INE647O01011"]
