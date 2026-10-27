@@ -6,6 +6,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from cagr.db import Connection
+from cagr_observatory.connections import open_or_503
 from cagr_observatory.review import queries, reasons
 from cagr_observatory.review.models import (
     Action,
@@ -50,7 +51,7 @@ def item_row(conn: Connection, kind: str, row: dict[str, Any]) -> Item:
 
 def router(connect: Callable[[], Connection]) -> APIRouter:
     def conn() -> Iterator[Connection]:
-        with connect() as c:
+        with open_or_503(connect) as c:
             yield c
 
     Conn = Annotated[Connection, Depends(conn)]

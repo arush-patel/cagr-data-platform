@@ -14,7 +14,7 @@ export function ReviewPage() {
   const [search, setSearch] = useSearchParams();
   const navigate = useNavigate();
   const tab = search.get("tab") === "history" ? "decided" : "pending";
-  const { data, isError, isLoading } = useQuery({
+  const { data, error, isLoading } = useQuery({
     queryKey: ["review", tab],
     queryFn: () => getItems(tab),
   });
@@ -65,7 +65,7 @@ export function ReviewPage() {
           </button>
         </div>
         {isLoading && <p className="empty">Loading…</p>}
-        {isError && <p className="error">The queue couldn't be loaded. Is the API running?</p>}
+        {error && <p className="error">The queue couldn't be loaded: {error.message}</p>}
         {items && <Queue items={items} history={tab === "decided"} selected={{ kind, id }} onOpen={open} />}
       </aside>
       <section className="item">

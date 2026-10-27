@@ -15,6 +15,6 @@ test("says when the database can't be reached", async () => {
   renderApp("/review", {
     "/api/health": { version: "0.1.0", database: false, detail: "OperationalError", reviewer: null },
   });
-  expect(await screen.findByText("Database unreachable")).toBeInTheDocument();
+  expect(await screen.findByText("Database unreachable: OperationalError")).toBeInTheDocument();
   expect(await screen.findByText(/The queue couldn't be loaded/)).toBeInTheDocument();
 });

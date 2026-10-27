@@ -11,9 +11,18 @@ export type Listing = Schemas["Listing"];
 export type Bar = Schemas["Bar"];
 export type ItemKind = Item["kind"];
 
+// The API says why a request failed in plain words; prefer that to the status line.
+async function failure(response: Response): Promise<Error> {
+  const detail = await response
+    .json()
+    .then((b: { detail?: unknown }) => (typeof b.detail === "string" ? b.detail : null))
+    .catch(() => null);
+  return new Error(detail ?? `${response.status} ${response.statusText}`);
+}
+
 export async function getJson<T>(path: string): Promise<T> {
   const response = await fetch(path, { headers: { Accept: "application/json" } });
-  if (!response.ok) throw new Error(`${path}: ${response.status} ${response.statusText}`);
+  if (!response.ok) throw await failure(response);
   return (await response.json()) as T;
 }
 
@@ -33,14 +42,7 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
     headers: { Accept: "application/json", "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!response.ok) {
-    // The API says why a decision was refused in plain words; show that, not the status.
-    const detail = await response
-      .json()
-      .then((b: { detail?: unknown }) => (typeof b.detail === "string" ? b.detail : null))
-      .catch(() => null);
-    throw new Error(detail ?? `${response.status} ${response.statusText}`);
-  }
+  if (!response.ok) throw await failure(response);
   return (await response.json()) as T;
 }
 

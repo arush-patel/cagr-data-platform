@@ -11,6 +11,7 @@ from pydantic import BaseModel
 
 from cagr import db
 from cagr_observatory import __version__
+from cagr_observatory.connections import unreachable
 from cagr_observatory.review import decide
 from cagr_observatory.review import routes as review
 from cagr_observatory.settings import Settings
@@ -49,7 +50,7 @@ def create_app(
             with connect() as conn:
                 conn.execute("SELECT 1")
         except Exception as exc:  # any failure means the page can't read
-            return Health(version=__version__, database=False, detail=type(exc).__name__)
+            return Health(version=__version__, database=False, detail=unreachable(exc))
         return Health(version=__version__, database=True, reviewer=reviewer)
 
     api.include_router(review.router(connect))

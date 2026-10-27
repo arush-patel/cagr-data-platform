@@ -27,7 +27,15 @@ def test_health(tmp_path: Path) -> None:
 
 def test_health_reports_database_failure(tmp_path: Path) -> None:
     body = client(tmp_path, failing).get("/api/health").json()
-    assert (body["database"], body["detail"], body["reviewer"]) == (False, "RuntimeError", None)
+    assert (body["database"], body["detail"], body["reviewer"]) == (
+        False, "CAGR_READ_DATABASE_URL is not set", None
+    )  # fmt: skip
+
+
+def test_a_missing_setting_is_a_503_in_words(tmp_path: Path) -> None:
+    response = client(tmp_path, failing).get("/api/review/items")
+    assert response.status_code == 503
+    assert response.json() == {"detail": "CAGR_READ_DATABASE_URL is not set"}
 
 
 def test_serves_ui_for_any_path_but_api(tmp_path: Path) -> None:
@@ -46,3 +54,10 @@ def test_the_ui_types_are_current() -> None:
     from cagr_observatory import openapi
 
     assert openapi.SCHEMA.read_text() == openapi.text()
+
+
+def test_the_server_reads_the_repository_env() -> None:
+    from cagr_observatory.__main__ import REPO_ENV
+
+    assert (REPO_ENV.parent / "pyproject.toml").read_text().startswith("[project]")
+    assert (REPO_ENV.parent / "observatory").is_dir()

@@ -64,6 +64,9 @@ API above:
 cd observatory/web && npm run dev                      # http://localhost:5173
 ```
 
+Settings come from the environment or the repository's `.env`, which the server reads at start,
+whichever folder it starts from. Restart it after changing them.
+
 | Setting | Default | Meaning |
 |---|---|---|
 | `CAGR_READ_DATABASE_URL` | none | The read-only login the API reads through (the toolkit's `cagr.db`) |
