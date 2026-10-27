@@ -11,7 +11,8 @@ see `docs/specs/` for what each step does.
   performance metrics, session calendars, time-based splits, feature declarations and read-only
   database access. It never imports `cagr_data`.
 - `db/migrations/`: numbered SQL migrations for every schema, applied in order with yoyo.
-- `docs/specs/`: one spec per step. Step one is `0001-nse-daily-market-data.md`.
+- `docs/`: documentation of what is built ([start here](docs/README.md)), and `docs/specs/`, one
+  spec per step. Step one is `0001-nse-daily-market-data.md`.
 
 ## Working on it
 
