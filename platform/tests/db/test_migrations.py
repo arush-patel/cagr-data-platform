@@ -28,6 +28,22 @@ def test_all_migrations_apply_then_rerun_is_a_no_op(
     assert migrate.apply(platform_url) == []
 
 
+def test_nothing_needs_the_public_schema(db: Conn) -> None:
+    can_create = db.execute(
+        "SELECT has_schema_privilege('cagr_platform', 'public', 'CREATE')"
+    ).fetchone()
+    assert can_create == (False,)  # as on Azure; the migrations still applied
+    in_public = db.execute(
+        "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace"
+        " WHERE n.nspname = 'public'"
+    ).fetchone()
+    assert in_public == (0,)
+    yoyo = db.execute(
+        "SELECT pg_get_userbyid(nspowner) FROM pg_namespace WHERE nspname = 'yoyo'"
+    ).fetchone()
+    assert yoyo == ("cagr_platform",)
+
+
 def test_expected_tables_exist(db: Conn) -> None:
     rows = db.execute(
         """
