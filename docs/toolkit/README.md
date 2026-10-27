@@ -105,7 +105,7 @@ import polars as pl
 from cagr import metrics
 
 curve = pl.DataFrame({"date": [date(2020, 1, 1), date(2022, 1, 1)], "equity": [100.0, 121.0]})
-metrics.cagr(curve)          # 0.0999... (731 days / 365.25 = 2.001 years)
+metrics.cagr(curve)  # 0.0999... (731 days / 365.25 = 2.001 years)
 metrics.max_drawdown(curve)  # 0.0
 ```
 
@@ -129,7 +129,7 @@ sessions, not weekdays. It does no I/O; `cagr.db.load_calendar` builds one from
 from cagr.db import connect_read, load_calendar
 
 cal = load_calendar(connect_read())
-cal.shift(cal.on_or_before(date(2024, 6, 15)), 20)   # 20 sessions after the last session ≤ 15 Jun
+cal.shift(cal.on_or_before(date(2024, 6, 15)), 20)  # 20 sessions after the last session ≤ 15 Jun
 ```
 
 ## `cagr.splits`
@@ -181,12 +181,14 @@ decorator records its name, version, inputs and warm-up:
 ```python
 from cagr import fs, ind
 
+
 @fs.feature(name="rsi_14", version=1, inputs=["close"], min_bars=15)
 def rsi_14():
     return ind.rsi(14)
 
-values = fs.compute(rsi_14, bars)          # columns: listing_id, date, rsi_14@1
-fs.check_no_future(rsi_14, bars)           # raises LookaheadError if it peeks ahead
+
+values = fs.compute(rsi_14, bars)  # columns: listing_id, date, rsi_14@1
+fs.check_no_future(rsi_14, bars)  # raises LookaheadError if it peeks ahead
 ```
 
 | Name | Does |
@@ -223,8 +225,9 @@ Read-only access to the platform database. Writing belongs to the platform's pip
 from cagr.db import connect_read, read_frame
 
 with connect_read() as conn:
-    bars = read_frame(conn, "SELECT * FROM raw.nse_cm_bar_current WHERE symbol = %s AND series = 'EQ'",
-                      ("INFY",))
+    bars = read_frame(
+        conn, "SELECT * FROM raw.nse_cm_bar_current WHERE symbol = %s AND series = 'EQ'", ("INFY",)
+    )
 ```
 
 Bars read from `raw` today are unadjusted and keyed by symbol; adjusted bars keyed by listing are
