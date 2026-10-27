@@ -7,3 +7,5 @@ __pycache__/
 .ruff_cache/
 dist/
 data/
+node_modules/
+*.tsbuildinfo

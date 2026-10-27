@@ -10,6 +10,8 @@ see `docs/specs/` for what each step does.
 - `toolkit/`: the shared library `cagr-toolkit`, imported as `cagr` (spec 0004): indicators,
   performance metrics, session calendars, time-based splits, feature declarations and read-only
   database access. It never imports `cagr_data`.
+- `observatory/`: the web app, a Python API (`api/`) and a React UI (`web/`). See
+  [docs/observatory](docs/observatory/README.md).
 - `db/migrations/`: numbered SQL migrations for every schema, applied in order with yoyo.
 - `docs/`: documentation of what is built ([start here](docs/README.md)), and `docs/specs/`, one
   spec per step. Step one is `0001-nse-daily-market-data.md`.

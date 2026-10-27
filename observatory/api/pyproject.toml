@@ -1,0 +1,21 @@
+[project]
+name = "cagr-observatory"
+version = "0.1.0"
+description = "The Observatory's API: review and, later, research and analytics pages"
+requires-python = ">=3.12"
+dependencies = [
+    "cagr-toolkit",
+    "fastapi>=0.115",
+    "pydantic-settings>=2.6",
+    "uvicorn>=0.32",
+]
+
+[project.scripts]
+observatory = "cagr_observatory.__main__:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cagr_observatory"]

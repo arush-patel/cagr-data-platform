@@ -3,16 +3,17 @@ name = "cagr-data-platform"
 version = "0.0.0"
 description = "Workspace root for the Cagr monorepo"
 requires-python = ">=3.12"
-dependencies = ["cagr-data", "cagr-toolkit"]
+dependencies = ["cagr-data", "cagr-observatory", "cagr-toolkit"]
 
 [tool.uv]
 package = false
 
 [tool.uv.workspace]
-members = ["platform", "toolkit"]
+members = ["platform", "toolkit", "observatory/api"]
 
 [tool.uv.sources]
 cagr-data = { workspace = true }
+cagr-observatory = { workspace = true }
 cagr-toolkit = { workspace = true }
 
 [dependency-groups]
@@ -32,18 +33,18 @@ target-version = "py312"
 select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["cagr_data", "cagr"]
+known-first-party = ["cagr_data", "cagr", "cagr_observatory"]
 
 [tool.mypy]
 strict = true
 python_version = "3.12"
-packages = ["cagr_data", "cagr"]
-mypy_path = "platform/src:toolkit/src"
+packages = ["cagr_data", "cagr", "cagr_observatory"]
+mypy_path = "platform/src:toolkit/src:observatory/api/src"
 
 [[tool.mypy.overrides]]
 module = ["yoyo", "yoyo.*", "xlsxwriter", "xlsxwriter.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
-testpaths = ["platform/tests", "toolkit/tests"]
+testpaths = ["platform/tests", "toolkit/tests", "observatory/api/tests"]
 markers = ["db: needs a Postgres database at CAGR_TEST_DATABASE_URL"]
