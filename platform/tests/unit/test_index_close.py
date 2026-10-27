@@ -86,3 +86,15 @@ def test_slashed_dates_are_read(nse_fixtures: Path) -> None:
     )
     frame = parse_index_close(csv, date(2026, 10, 23))
     assert frame["trade_date"].unique().to_list() == [date(2026, 10, 23)]
+
+
+def test_an_exact_duplicate_row_is_kept_once(nse_fixtures: Path) -> None:
+    # 15 Sep 2014 lists GSEC10 NSE Index twice, byte for byte.
+    csv = (nse_fixtures / "ind_close_all_23102026.csv").read_bytes()
+    lines = csv.splitlines(keepends=True)
+    once = parse_index_close(csv, DAY)
+    twice = parse_index_close(b"".join([*lines[:2], lines[1], *lines[2:]]), DAY)
+    assert twice.equals(once)
+    changed = lines[1][:-3] + b"99" + lines[1][-1:]  # the same index, another div yield
+    with pytest.raises(FileShapeError):
+        parse_index_close(b"".join([*lines[:2], changed, *lines[2:]]), DAY)
