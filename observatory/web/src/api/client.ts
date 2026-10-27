@@ -8,7 +8,8 @@ export type Item = Schemas["Item"];
 export type AdjustmentDetail = Schemas["AdjustmentDetail"];
 export type ChangeDetail = Schemas["ChangeDetail"];
 export type Listing = Schemas["Listing"];
-export type Bar = Schemas["Bar"];
+export type Close = Schemas["Close"];
+export type Category = Item["category"];
 export type ItemKind = Item["kind"];
 
 // The API says why a request failed in plain words; prefer that to the status line.

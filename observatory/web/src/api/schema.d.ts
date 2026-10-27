@@ -145,8 +145,17 @@ export interface components {
         /** AdjustmentDetail */
         AdjustmentDetail: {
             action: components["schemas"]["Action"] | null;
+            /** Approve Effect */
+            approve_effect: string;
             /** Bars */
-            bars: components["schemas"]["Bar"][];
+            bars: components["schemas"]["Close"][];
+            /**
+             * Category
+             * @enum {string}
+             */
+            category: "unexplained_jump" | "clean_ratio_jump" | "action_disagrees" | "missing_ratio" | "unparsed" | "demerger" | "dividend_too_big" | "possible_merge" | "possible_rename" | "other";
+            /** Category Label */
+            category_label: string;
             /** Chart Factor */
             chart_factor: number | null;
             /** Close Before */
@@ -166,6 +175,8 @@ export interface components {
             expected_factor: number | null;
             /** Factor */
             factor: number | null;
+            /** Guide */
+            guide: string;
             /** Id */
             id: number;
             /** Isin Before */
@@ -187,10 +198,16 @@ export interface components {
             observed_factor: number | null;
             /** Overdue */
             overdue: boolean;
+            /** Previous Trade */
+            previous_trade: string | null;
             /** Proposed By */
             proposed_by: string;
             /** Reason */
             reason: string;
+            /** Reject Effect */
+            reject_effect: string;
+            /** Silent Sessions */
+            silent_sessions: number | null;
             /**
              * Status
              * @enum {string}
@@ -210,20 +227,17 @@ export interface components {
             /** Note */
             note?: string | null;
         };
-        /** Bar */
-        Bar: {
-            /** Adjusted */
-            adjusted: number;
-            /** Close */
-            close: number;
-            /**
-             * Date
-             * Format: date
-             */
-            date: string;
-        };
         /** ChangeDetail */
         ChangeDetail: {
+            /** Approve Effect */
+            approve_effect: string;
+            /**
+             * Category
+             * @enum {string}
+             */
+            category: "unexplained_jump" | "clean_ratio_jump" | "action_disagrees" | "missing_ratio" | "unparsed" | "demerger" | "dividend_too_big" | "possible_merge" | "possible_rename" | "other";
+            /** Category Label */
+            category_label: string;
             /** Change Kind */
             change_kind: string;
             /**
@@ -239,6 +253,8 @@ export interface components {
             evidence: {
                 [key: string]: unknown;
             };
+            /** Guide */
+            guide: string;
             /** Id */
             id: number;
             /**
@@ -264,6 +280,10 @@ export interface components {
             proposed_by: string;
             /** Reason */
             reason: string;
+            /** Reject Effect */
+            reject_effect: string;
+            /** Series */
+            series: components["schemas"]["Series"][];
             /**
              * Status
              * @enum {string}
@@ -275,6 +295,16 @@ export interface components {
             title: string;
             /** Waiting Sessions */
             waiting_sessions: number;
+        };
+        /** Close */
+        Close: {
+            /** Close */
+            close: number;
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -297,6 +327,13 @@ export interface components {
          * @description One row of the queue or the history.
          */
         Item: {
+            /**
+             * Category
+             * @enum {string}
+             */
+            category: "unexplained_jump" | "clean_ratio_jump" | "action_disagrees" | "missing_ratio" | "unparsed" | "demerger" | "dividend_too_big" | "possible_merge" | "possible_rename" | "other";
+            /** Category Label */
+            category_label: string;
             /**
              * Date
              * Format: date
@@ -368,6 +405,18 @@ export interface components {
         Reject: {
             /** Note */
             note: string;
+        };
+        /**
+         * Series
+         * @description One listing's unadjusted closes around a date, for a chart.
+         */
+        Series: {
+            /** Closes */
+            closes: components["schemas"]["Close"][];
+            /** Listing Id */
+            listing_id: number;
+            /** Symbol */
+            symbol: string | null;
         };
         /** ValidationError */
         ValidationError: {

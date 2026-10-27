@@ -222,6 +222,7 @@ def test_queue_lists_pending_items_oldest_first(client: TestClient, ids: dict[st
     assert "The ISIN changed" in jump["reason"]
     assert jump["waiting_sessions"] == 38 and jump["overdue"] is True
     assert merge["title"] == "Possible merge" and "OLDCO" in merge["reason"]
+    assert (jump["category"], merge["category"]) == ("unexplained_jump", "possible_merge")
 
 
 def test_history_lists_what_a_person_decided(client: TestClient, ids: dict[str, int]) -> None:
@@ -232,25 +233,29 @@ def test_history_lists_what_a_person_decided(client: TestClient, ids: dict[str, 
     assert items[0]["title"] == "Bonus 1:1" and items[0]["overdue"] is False
 
 
-def test_adjustment_detail_has_the_chart(client: TestClient, ids: dict[str, int]) -> None:
+def test_adjustment_detail_explains_and_charts(client: TestClient, ids: dict[str, int]) -> None:
     item = client.get(f"/api/review/items/adjustment/{ids['jump']}").json()
     assert (item["isin_before"], item["isin_on"]) == ("INE000K01011", "INE000K01029")
     assert item["chart_factor"] == 100 and item["action"] is None
+    assert (item["category"], item["category_label"]) == (
+        "unexplained_jump", "Jump nothing explains"
+    )  # fmt: skip
+    assert item["guide"].startswith("Look at what the price does after the jump")
+    assert item["approve_effect"].startswith("Every close before 06 Feb 2024 is multiplied by 100")
+    assert (item["previous_trade"], item["silent_sessions"]) == ("2024-02-05", 0)
     bars = item["bars"]
-    assert len(bars) == 40  # 20 sessions either side
     before = [b for b in bars if b["date"] < str(EX)]
-    assert len(before) == 20 and before[-1] == {
-        "date": "2024-02-05",
-        "close": 0.42,
-        "adjusted": 42.0,
-    }
-    assert bars[20] == {"date": str(EX), "close": 41.85, "adjusted": 41.85}
+    assert len(before) == 26 and len(bars) == 65  # fewer than 40 on either side, so all of them
+    assert before[-1] == {"date": "2024-02-05", "close": 0.42}
+    assert bars[26] == {"date": str(EX), "close": 41.85}
 
 
 def test_change_detail_shows_both_listings(client: TestClient, ids: dict[str, int]) -> None:
     item = client.get(f"/api/review/items/change/{ids['merge']}").json()
     assert [listing["symbol"] for listing in item["listings"]] == ["NEWCO", "OLDCO"]
-    assert item["evidence"]["rule"] == "5.2.2"
+    assert [s["symbol"] for s in item["series"]] == ["NEWCO", "OLDCO"]
+    assert item["evidence"]["rule"] == "5.2.2" and item["category"] == "possible_merge"
+    assert "merged into OLDCO" in item["approve_effect"]
 
 
 def test_unknown_item_is_404(client: TestClient) -> None:
