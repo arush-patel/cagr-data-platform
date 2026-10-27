@@ -124,25 +124,35 @@ accidentally mix stocks. Cross-sectional features (ranks within an industry) dec
 import polars as pl
 from cagr import fs
 
-@fs.feature(name="range_contraction", version=1, inputs=["high", "low"],
-            asset_classes=["equity", "index"], min_bars=25)
+
+@fs.feature(
+    name="range_contraction",
+    version=1,
+    inputs=["high", "low"],
+    asset_classes=["equity", "index"],
+    min_bars=25,
+)
 def range_contraction() -> pl.Expr:
     rng = lambda n: pl.col("high").rolling_max(n) - pl.col("low").rolling_min(n)
-    return rng(5) / rng(20).shift(5)       # last 5 sessions' range / the 20 before them
+    return rng(5) / rng(20).shift(5)  # last 5 sessions' range / the 20 before them
 ```
 
 ```python
 # in a notebook
 from cagr import fs, dataset, splits, track
 
-fs.preview(range_contraction, listings=["RELIANCE", "TCS"], start="2024-01-01")   # seconds, plotted
-fs.register(range_contraction)                          # every listing, stored as range_contraction@1
+fs.preview(range_contraction, listings=["RELIANCE", "TCS"], start="2024-01-01")  # seconds, plotted
+fs.register(range_contraction)  # every listing, stored as range_contraction@1
 
-ds = dataset(events="golden_a@11", at="T-1",              # one row per golden, values as of the day before
-             features=["range_contraction@1", "atr14_pct@2"], universe="xnse_liquid")
+ds = dataset(
+    events="golden_a@11",
+    at="T-1",  # one row per golden, values as of the day before
+    features=["range_contraction@1", "atr14_pct@2"],
+    universe="xnse_liquid",
+)
 for train, test in splits.walk_forward(ds, train_years=4, test_months=6, gap_sessions=20):
     with track.run("C1 trees", dataset=ds) as run:
-        ...                                             # scikit-learn as today; ds.to_pandas() when needed
+        ...  # scikit-learn as today; ds.to_pandas() when needed
 ```
 
 ### Rules the toolkit enforces
