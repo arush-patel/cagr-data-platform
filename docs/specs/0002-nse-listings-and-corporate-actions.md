@@ -176,7 +176,7 @@ its current symbol and ISIN, so "which ISINs are we tracking?" is one query.
 | `ref.listing` | listing | `listing_id` (integer identity), `venue_id` (`XNSE`), `asset_class` (`equity`, `etf`, `reit`, `invit`, `index`), `board` (`main`, `sme`, null for indices), `name` (latest from the masters), `listed_on` (the master's listing date when known), `first_session`, `last_session`, `status` (`active`, `inactive`, `merged`), `merged_into` |
 | `ref.listing_symbol` | symbol period of a listing | `listing_id`, `symbol`, `valid_from`, `valid_to`, `change_id` |
 | `ref.listing_isin` | ISIN period of a listing | `listing_id`, `isin`, `valid_from`, `valid_to`, `change_id` |
-| `ref.listing_change` | change, applied or waiting | `change_id`, `kind` (`new_listing`, `symbol_change`, `isin_change`, `merge`, `index_rename`), `listing_id`, `effective_date`, `payload` (jsonb: old and new values), `evidence` (jsonb: file ids, rule, matching rows), `status` (`applied`, `pending`, `rejected`), `auto` (true when the rules applied it), `proposed_by`, `decided_by`, `decided_at`, `note` |
+| `ref.listing_change` | change, applied or waiting | `change_id`, `kind` (`new_listing`, `symbol_change`, `isin_change`, `merge`, `index_rename`), `listing_id`, `effective_date`, `payload` (jsonb: old and new values), `evidence` (jsonb: file ids, rule, matching rows), `status` (`applied`, `pending`, `rejected`), `auto` (true when the rules applied it), `proposed_by` (`rules`, or the person's name), `decided_by`, `decided_at`, `note` |
 
 Rules the database enforces:
 
@@ -186,7 +186,21 @@ Rules the database enforces:
 - **No symbol or ISIN on two listings on the same day.** A text column can't go in a gist
   exclusion without `btree_gist`, which we can't enable, so a critical `ref`-layer check does
   this after each session's step (section 8).
-- **Someone else decides.** `decided_by <> proposed_by` (D16).
+- **Someone else decides.** `decided_by <> proposed_by` (D16). Rows the rules propose carry
+  `proposed_by = 'rules'`, so any person can decide them.
+
+The `evidence` of a change has a fixed shape, so the review page can show it without working it
+out again:
+
+| Key | Present for | Value |
+|---|---|---|
+| `rule` | every change | `"5.2.1"` to `"5.2.4"`, `"5.3"`, `"5.5"` or `"manual"` |
+| `session` | every change | the session date the rule ran on |
+| `file_ids` | every change | the `raw.vendor_file` ids it read |
+| `row` | rule changes | the bhavcopy row: `symbol`, `series`, `isin`, `close`, `volume` |
+| `previous` | symbol and ISIN changes | the listing's last row before the change: `date`, `symbol`, `isin`, `close` |
+| `symbolchange` | rule 5.2.3 | the `symbolchange.csv` row: `old_symbol`, `new_symbol`, `date` |
+| `candidates` | review items about a possible merge or rename | the `listing_id`s it could belong to |
 
 `ref.listing_change` is the audit trail: the symbol and ISIN tables can always be rebuilt from
 its applied rows.
@@ -200,7 +214,7 @@ each venue. NSE alone doesn't need it.
 |---|---|---|
 | `raw.nse_corporate_action` | row of an API response | `file_id`, `symbol`, `series`, `isin`, `company`, `subject`, `ex_date`, `record_date`, `face_value`, plus the other fields the response carries, as text |
 | `ref.corporate_action` | parsed action | `action_id`, `listing_id`, `ex_date`, `kind` (`split`, `bonus`, `consolidation`, `rights`, `demerger`, `dividend`, `buyback`, `other`), `ratio_new`, `ratio_old`, `cash_per_share`, `issue_price` (rights), `subject`, `parse_status` (`parsed`, `unparsed`), `source_file_id` |
-| `ref.price_adjustment` | ex-date that changed a listing's price basis | `adjustment_id` (rising identity), `listing_id`, `ex_date`, `factor` (multiplies prices before `ex_date`), `observed_factor`, `expected_factor`, `action_id` (null when nothing explains it), `status` (`applied`, `pending`, `rejected`), `auto`, `decided_by`, `applied_at`, `note` |
+| `ref.price_adjustment` | ex-date that changed a listing's price basis | `adjustment_id` (rising identity), `listing_id`, `ex_date`, `factor` (multiplies prices before `ex_date`), `observed_factor`, `expected_factor`, `close_before` (the previous traded close), `close_on` (the ex-date's close), `action_id` (null when nothing explains it), `status` (`applied`, `pending`, `rejected`), `auto`, `proposed_by`, `decided_by`, `decided_at`, `applied_at`, `note` |
 
 `factor` is what spec 0003 multiplies into every price before the ex-date. Volumes are divided by
 it.
