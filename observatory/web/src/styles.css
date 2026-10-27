@@ -110,3 +110,165 @@ body {
     border-bottom: 1px solid var(--line);
   }
 }
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.tabs button {
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.tabs button[aria-selected="true"] {
+  color: var(--text);
+  background: var(--bg);
+  font-weight: 600;
+}
+
+.group h3 {
+  font-size: 13px;
+  color: var(--muted);
+  font-weight: 600;
+  margin: 16px 0 6px;
+}
+
+.group ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.row:hover {
+  background: var(--bg);
+}
+
+.row.selected {
+  background: var(--bg);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.row-sub {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.age {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.age.overdue,
+.warning {
+  color: var(--bad);
+}
+
+.status {
+  font-size: 13px;
+}
+
+.status.applied {
+  color: var(--good);
+}
+
+.status.rejected {
+  color: var(--bad);
+}
+
+.item-header h2 {
+  margin: 0 0 4px;
+  font-size: 20px;
+}
+
+.meta,
+.hint,
+.note {
+  color: var(--muted);
+  margin: 0 0 8px;
+}
+
+.reason {
+  font-size: 17px;
+  max-width: 70ch;
+  margin: 12px 0 20px;
+}
+
+.error {
+  color: var(--bad);
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 24px;
+  margin: 0 0 24px;
+}
+
+.facts .fact {
+  display: contents;
+}
+
+.facts dt {
+  color: var(--muted);
+}
+
+.facts dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-title {
+  font-size: 15px;
+  margin: 0 0 2px;
+}
+
+.chart {
+  height: 280px;
+  max-width: 900px;
+}
+
+.listings {
+  border-collapse: collapse;
+  margin: 0 0 24px;
+  font-variant-numeric: tabular-nums;
+}
+
+.listings caption {
+  text-align: left;
+  color: var(--muted);
+  padding-bottom: 6px;
+}
+
+.listings th,
+.listings td {
+  text-align: left;
+  padding: 4px 16px 4px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.listings th {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--muted);
+}
