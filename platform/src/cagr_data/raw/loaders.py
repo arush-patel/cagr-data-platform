@@ -1,6 +1,7 @@
 """Bulk loads of parsed rows into the raw row tables, with COPY."""
 
 from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Any
 
 import polars as pl
@@ -50,7 +51,25 @@ def load_rows(conn: Connection, table: str, file_id: int, frame: pl.DataFrame) -
     return frame.height
 
 
+_deferred: set[str] | None = None
+
+
 def analyze(conn: Connection, table: str) -> None:
     """Refresh planner statistics; needed after bulk loads into a partitioned table, which
-    autovacuum never analyzes."""
+    autovacuum never analyzes. Inside deferred_analyze, only notes the table."""
+    if _deferred is not None:
+        _deferred.add(table)
+        return
     conn.execute(sql.SQL("ANALYZE {}").format(_table(table)))
+
+
+@contextmanager
+def deferred_analyze() -> Iterator[set[str]]:
+    """Skip the per-file ANALYZE (seconds on a large partitioned table) for a backfill; yields
+    the tables loaded, which the caller analyzes once at the end."""
+    global _deferred
+    outer, _deferred = _deferred, set()
+    try:
+        yield _deferred
+    finally:
+        _deferred = outer

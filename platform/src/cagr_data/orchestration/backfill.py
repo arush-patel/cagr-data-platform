@@ -5,13 +5,17 @@
 Runs in the order the calendar needs: the session files day by day, then the holiday lists and
 the calendar (which records what the archive proves before 2011), then the file_arrived check
 day by day. Every partition is its own Dagster run, recorded in DAGSTER_HOME when it is set, so
-they show in `dagster dev`. Reads .env from the current folder. At 1 request a second a year
-takes about 12 minutes. Exits 1 if any partition failed, after listing them.
+they show in `dagster dev`. Reads .env from the current folder. Exits 1 if any partition failed,
+after listing them.
 
 Several backfills can run side by side over different years, each with `--rate 0.25` so NSE
-still sees at most one request a second in total; per-day overhead (a Dagster run and the
-database round trips) is most of the time, so this is nearly four times faster. Leave
-DAGSTER_HOME unset for parallel runs: its SQLite run storage is not meant for several writers.
+still sees at most one request a second in total; the database work of one day then fits in the
+wait between its requests. Leave DAGSTER_HOME unset for parallel runs: its SQLite run storage is
+not meant for several writers.
+
+To keep a day's database work short over the laptop's tunnel, a backfill keeps one connection
+open, analyzes raw.nse_cm_bar once after the last file rather than after each, and skips the
+index and PR zip requests on days NSE has no bhavcopy for (weekends and holidays).
 
 If a partition fails because the database is unreachable (the laptop's tunnel dropped), it waits
 for the database to come back and runs that partition again, rather than failing every day left.
@@ -30,6 +34,7 @@ from dotenv import load_dotenv
 
 from cagr_data.orchestration import assets
 from cagr_data.orchestration.resources import PlatformDatabase
+from cagr_data.raw.loaders import analyze, deferred_analyze
 
 # The PR zip assets fetch only on days their feeds cover (2010 to 2013, and from 1 Feb 2024).
 FILE_ASSETS = (
@@ -125,8 +130,15 @@ def backfill(
             extra = f" (failed checks: {', '.join(failed)})" if failed else ""
             print(f"{label}: {status}{extra}", flush=True)
 
-    for day in _days(start, end):
-        run(FILE_ASSETS, f"{day} files", day.isoformat())
+    with deferred_analyze() as loaded:
+        for day in _days(start, end):
+            run(FILE_ASSETS, f"{day} files", day.isoformat())
+    if loaded:
+        db = resources["db"]
+        assert isinstance(db, PlatformDatabase)
+        with db.connect() as conn:
+            for table in sorted(loaded):
+                analyze(conn, table)
     run((assets.nse_holidays,), "holiday lists", None)
     run((assets.xnse_calendar,), "calendar", None)
     for day in _days(start, end):
@@ -153,7 +165,13 @@ def main(argv: list[str] | None = None) -> int:
     from cagr_data.orchestration.resources import NseClient
 
     instance = dg.DagsterInstance.get() if os.environ.get("DAGSTER_HOME") else None
-    resources = {**RESOURCES, "nse": NseClient(rate_limit_per_s=args.rate)}
+    db = RESOURCES["db"]
+    assert isinstance(db, PlatformDatabase)
+    resources = {
+        **RESOURCES,
+        "db": PlatformDatabase(url=db.url, reuse=True),
+        "nse": NseClient(rate_limit_per_s=args.rate),
+    }
     failures = backfill(args.start, args.end, resources, instance=instance)
     print(f"\n{len(failures)} failure(s)" + "".join(f"\n  {f}" for f in failures))
     return 1 if failures else 0

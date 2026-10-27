@@ -115,6 +115,31 @@ def _kind(context: dg.AssetExecutionContext) -> RunKind:
     return "nightly"
 
 
+BHAVCOPY = "nse_cm_bhavcopy"
+
+
+def no_session(conn: Connection, day: date) -> bool:
+    """NSE answered 404 for the bhavcopy of day, at least two days later, and none is stored:
+    no session, so no session file of any dataset. A backfill uses it to skip the index and PR
+    zip requests on the roughly 110 weekends and holidays a year, and to skip asking again for
+    a bhavcopy an earlier backfill was already told is missing. The nightly run does not,
+    since on the night a 404 may only mean the file is late."""
+    row = conn.execute(
+        """
+        SELECT NOT EXISTS (SELECT 1 FROM raw.vendor_file f JOIN raw.feed d USING (feed_id)
+                            WHERE d.dataset = %(ds)s AND f.partition_date = %(day)s)
+           AND EXISTS (SELECT 1 FROM raw.fetch_attempt a JOIN raw.feed d USING (feed_id)
+                        WHERE d.dataset = %(ds)s AND a.partition_date = %(day)s
+                          AND a.http_status = 404 AND a.attempted_at > %(day)s::date + 2)
+           AND NOT EXISTS (SELECT 1 FROM raw.fetch_attempt a JOIN raw.feed d USING (feed_id)
+                            WHERE d.dataset = %(ds)s AND a.partition_date = %(day)s
+                              AND a.http_status IS DISTINCT FROM 404)
+        """,
+        {"ds": BHAVCOPY, "day": day},
+    ).fetchone()
+    return bool(row and row[0])
+
+
 def _fetch(
     context: dg.AssetExecutionContext,
     db: PlatformDatabase,
@@ -130,27 +155,28 @@ def _fetch(
 ) -> tuple[list[FetchOutcome], list[Outcome], list[Outcome]]:
     """Fetch and ingest every feed of dataset for day; commit after each feed."""
     storage = raw.storage()
-    with db.connect() as conn, nse.client() as client:
+    with db.connect() as conn:
+        feeds = (
+            [load_feed(conn, f) for f in feed_ids] if feed_ids else feeds_for(conn, dataset, day)
+        )
+        if not feeds or (kind == "backfill" and no_session(conn, day)):
+            return [], [], []
         run = _Run(conn, context, kind)
         fetched: list[FetchOutcome] = []
         outcomes: list[Outcome] = []
         critical: list[Outcome] = []
         try:
-            feeds = (
-                [load_feed(conn, f) for f in feed_ids]
-                if feed_ids
-                else feeds_for(conn, dataset, day)
-            )
-            for feed in feeds:
-                o = fetch_and_ingest(conn, client, storage, run_id=run.run_id, feed=feed,
-                                     day=day, url_day=url_day,
-                                     revision_check=revision_check)  # fmt: skip
-                conn.commit()
-                context.log.info(f"{feed.feed_id} {day}: {o.status} ({o.http_status})")
-                fetched.append(o)
-                if o.result is not None:
-                    outcomes += o.result.outcomes
-                    critical += o.result.critical
+            with nse.client() as client:
+                for feed in feeds:
+                    o = fetch_and_ingest(conn, client, storage, run_id=run.run_id, feed=feed,
+                                         day=day, url_day=url_day,
+                                         revision_check=revision_check)  # fmt: skip
+                    conn.commit()
+                    context.log.info(f"{feed.feed_id} {day}: {o.status} ({o.http_status})")
+                    fetched.append(o)
+                    if o.result is not None:
+                        outcomes += o.result.outcomes
+                        critical += o.result.critical
         except BaseException:
             run.finish(succeeded=False)
             raise
@@ -183,7 +209,10 @@ def _session_asset(
 ) -> Iterator[dg.AssetCheckResult | Materialized]:
     day = date.fromisoformat(context.partition_key)
     fetched, outcomes, critical = _fetch(context, db, raw, nse, dataset, day, _kind(context))
-    why = ", ".join(f"{f.feed_id}: {f.status}" for f in fetched) or "no feed publishes this day"
+    why = (
+        ", ".join(f"{f.feed_id}: {f.status}" for f in fetched)
+        or "no feed publishes this day, or no session"
+    )
     yield from _check_results(check_ids, outcomes, why)
     yield dg.MaterializeResult(metadata=_metadata(fetched))
     if critical:
@@ -199,7 +228,7 @@ def _session_asset(
 def nse_cm_bhavcopy(
     context: dg.AssetExecutionContext, db: PlatformDatabase, raw: RawStorage, nse: NseClient
 ) -> Iterator[dg.AssetCheckResult | Materialized]:
-    yield from _session_asset(context, db, raw, nse, "nse_cm_bhavcopy", BAR_CHECKS)
+    yield from _session_asset(context, db, raw, nse, BHAVCOPY, BAR_CHECKS)
 
 
 @dg.asset(
