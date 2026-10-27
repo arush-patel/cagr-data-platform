@@ -1,43 +1,36 @@
-# Cagr data platform documentation
+# Documentation
 
-This folder documents what is **built and merged on `main`**. Plans and designs for future steps
-live in [`specs/`](specs/); anything described here exists in code today. Where a spec and the code
-differ, these pages follow the code.
+These pages describe what is **built and merged on `main`**. Plans for future steps live in
+[`specs/`](specs/). If a spec and the code disagree, these pages follow the code.
 
-## What exists today
+## What the platform does today
 
-| Area | Package / folder | Status | Docs |
-|---|---|---|---|
-| NSE daily market data (raw layer) | `platform/` (`cagr_data`) | Built (spec 0001) | [Pipeline](pipeline/nse-daily.md), [Data quality](pipeline/data-quality.md) |
-| Database schemas `ops`, `ref`, `raw` | `db/migrations/` 0001 to 0006 | Built | [Database](data-model/database.md) |
-| XNSE trading calendar | `cagr_data.reference.calendar` | Built | [Trading calendar](data-model/calendar.md) |
-| Shared library `cagr` (first slice) | `toolkit/` (`cagr`) | Built (spec 0004, slice T1) | [Toolkit](toolkit/README.md) |
-| CI | `.github/workflows/ci.yml` | Built | [Development](operations/development.md) |
-
-Not built yet, so not documented here: listings and corporate actions (spec 0002), clean bars
-(spec 0003), features materialised in a lake, the lab, the Observatory, deployment to the VM.
+Every evening it downloads NSE's daily market files, keeps the original files, loads every row into
+Postgres exactly as NSE sent it, checks the data, and keeps a trading calendar. A shared Python
+library, `cagr`, has indicators, performance metrics and other tools that every part of the
+platform will use.
 
 ## Pages
 
-1. [Architecture overview](architecture/overview.md): the monorepo, its packages, how they depend on
-   each other, and where things run.
-2. Data
-   - [Data sources](data-model/sources.md): every NSE feed, its URL, format and coverage.
-   - [Database](data-model/database.md): schemas, tables, views, partitions, roles and migrations.
-   - [Trading calendar](data-model/calendar.md): how sessions are derived and numbered.
-3. Pipeline
-   - [NSE daily pipeline](pipeline/nse-daily.md): Dagster assets, schedules, fetch, ingest,
-     receipts, revisions, storage and backfill.
-   - [Data quality](pipeline/data-quality.md): the twelve raw-layer checks.
-4. [Toolkit (`cagr`)](toolkit/README.md): indicators, metrics, calendar, splits, features and
-   read access.
-5. Operations
-   - [Running the platform](operations/running.md): settings, migrations, Dagster, backfill.
-   - [Development and CI](operations/development.md): workspace, tests, lint, type checks.
+| Page | Read it to learn |
+|---|---|
+| [Overview](architecture/overview.md) | How the repository is laid out and how the parts fit together |
+| [Data sources](data-model/sources.md) | Which NSE files we download and what is in them |
+| [Database](data-model/database.md) | What each schema and table holds |
+| [Trading calendar](data-model/calendar.md) | How we know which days NSE traded |
+| [NSE daily pipeline](pipeline/nse-daily.md) | What runs each night, and how a file gets from NSE into the database |
+| [Data quality](pipeline/data-quality.md) | The checks run on every file |
+| [Toolkit](toolkit/README.md) | The `cagr` library's functions |
+| [Running the platform](operations/running.md) | Settings, migrations, the pipeline and backfills |
+| [Development](operations/development.md) | Tests, lint, CI and conventions |
 
-Diagrams are [Mermaid](https://mermaid.js.org/) and render on GitHub.
+## Not built yet
 
-## Keeping these pages true
+These are not documented here: listings and corporate actions (spec 0002), adjusted bars
+(spec 0003), the feature lake, the lab, the Observatory, and deployment to the VM.
 
-Update the page in the same pull request as the code it describes. A page that describes a plan
-belongs in `specs/`, not here.
+## Writing these pages
+
+Readability comes first: someone new should get a page at a glance. Start with a short summary,
+use plain words and tables, and add a diagram only when it explains something a table can't.
+Update a page in the same pull request as the code it describes.
