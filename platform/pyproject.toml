@@ -7,6 +7,9 @@ dependencies = [
     "psycopg[binary]>=3.2",
     "pydantic-settings>=2.6",
     "yoyo-migrations>=9.0",
+    "polars>=1.20",
+    "httpx>=0.28",
+    "tenacity>=9.0",
 ]
 
 [build-system]
