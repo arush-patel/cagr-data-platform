@@ -149,13 +149,17 @@ def holiday_exceptions(
 
 
 def archive_exceptions(
-    found: Iterable[date], missing: Iterable[date], weekend_days: Sequence[int]
+    found: Iterable[date],
+    missing: Iterable[date],
+    weekend_days: Sequence[int],
+    since: date | None = None,
 ) -> list[CalendarException]:
     """Exceptions proved by the archive: which days had a file (200) and which had none (404).
 
-    A weekday without a file is a holiday only between the first and last days with a file, so a
-    file that is merely late (tonight's) is not mistaken for a holiday. A weekend day with a file
-    is a special session.
+    A weekday without a file is a holiday only before the last day with a file, so a file that
+    is merely late (tonight's) is not mistaken for a holiday, and only from `since` (the day the
+    archive is known to start) or else after the first day with a file. A weekend day with a
+    file is a special session.
     """
     found = sorted(set(found))
     weekend = set(weekend_days)
@@ -169,7 +173,7 @@ def archive_exceptions(
         result += [
             CalendarException(date=d, kind="holiday", source="archive_proof")
             for d in sorted(set(missing) - set(found))
-            if first < d < last and d.isoweekday() not in weekend
+            if (since <= d if since else first < d) and d < last and d.isoweekday() not in weekend
         ]
     return sorted(result, key=lambda e: (e.date, e.kind))
 
@@ -257,4 +261,6 @@ def record_archive_proof(
             (dataset, before),
         ).fetchall()
     ]
-    return record_exceptions(conn, venue_id, archive_exceptions(found, missing, venue[0]))
+    # The bhavcopy archive starts with the calendar: 1 Jan 2010 has no file, so it was no session.
+    proved = archive_exceptions(found, missing, venue[0], since=CALENDAR_START)
+    return record_exceptions(conn, venue_id, proved)

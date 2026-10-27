@@ -199,8 +199,9 @@ holiday on the same date; a listed holiday is not a session, even on a weekend (
 `session_index` counts from 1 Jan 2010, so the table is always rebuilt whole. `is_week_end` and
 `is_month_end` mark the last session of an ISO week (Monday to Sunday) or a month, and are left
 false while that week or month is still open at the end of the built range. A 404 only counts as
-archive proof of a holiday between two days that have files, so tonight's late file is never
-read as a holiday.
+archive proof of a holiday before the last day that has a file, so tonight's late file is never
+read as a holiday, and from 1 Jan 2010, where the archive starts. 1 Jan 2010 itself has no
+bhavcopy (the first file is 4 Jan), so it is a holiday by archive proof.
 
 ### 6.3 `raw`: what NSE sent
 
