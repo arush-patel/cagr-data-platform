@@ -11,7 +11,7 @@ import pytest
 
 from cagr_data.core.db import Connection
 from cagr_data.orchestration import assets
-from cagr_data.orchestration.backfill import backfill
+from cagr_data.orchestration.backfill import backfill, database_reachable
 from cagr_data.orchestration.resources import NseClient, PlatformDatabase, RawStorage
 from cagr_data.vendors.http import VendorClient
 
@@ -236,3 +236,12 @@ def test_backfill_skips_other_files_on_days_without_a_bhavcopy(
     REQUESTS.clear()  # a second backfill trusts the 404s it was given days after the date
     backfill(date(2024, 7, 6), date(2024, 7, 7), resources, log=False)
     assert [p for p in REQUESTS if p != "/api/holiday-master"] == []
+
+
+def test_the_probe_resolves_an_env_var_url(
+    dagster_db: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # As the backfill builds it from RESOURCES: outside a run the url is still the EnvVar.
+    monkeypatch.setenv("CAGR_TEST_PROBE_URL", dagster_db)
+    db = PlatformDatabase(url=dg.EnvVar("CAGR_TEST_PROBE_URL"), reuse=True)
+    assert database_reachable({"db": db})()

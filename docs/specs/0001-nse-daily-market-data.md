@@ -293,7 +293,7 @@ change.
 | `file_shape` | The file has exactly the columns its format expects | critical |
 | `trade_date_matches` | The date inside the file equals the partition date | critical |
 | `no_duplicates` | One row per (symbol, series) in bhavcopy; one per index name in index closes | critical |
-| `row_count` | Bhavcopy rows within 10% (or 50 rows, whichever is larger) of the median of the previous 20 sessions | critical |
+| `row_count` | Bhavcopy rows within 10% (or 50 rows, whichever is larger) of the median of the previous 20 sessions, counting only files from the 40 calendar days before (none there, as at the start of a backfill chunk: skipped) | critical |
 | `holiday_session` | A file on a listed holiday (expected only for Muhurat trading) | warn |
 | `benchmark_present` | Nifty 50 is in the index file | critical |
 | `prices_positive` | open, high, low, close > 0 where volume > 0 | warn |

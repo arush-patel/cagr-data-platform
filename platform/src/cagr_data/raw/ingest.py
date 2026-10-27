@@ -5,7 +5,7 @@ The Dagster assets (task 6) call this and nothing more clever: fetch the bytes, 
 """
 
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, timedelta
 
 import polars as pl
 
@@ -41,10 +41,13 @@ class IngestResult:
 
 
 def _previous_row_counts(conn: Connection, dataset: str, day: date, sessions: int) -> list[int]:
+    """The row counts of up to `sessions` files before day, from the last 2 x sessions calendar
+    days only: a backfill that starts mid-history must not compare with files from years
+    earlier, and a gap in what is loaded leaves nothing to compare with."""
     rows = conn.execute(
         "SELECT row_count FROM raw.vendor_file_current WHERE dataset = %s AND partition_date < %s"
-        " ORDER BY partition_date DESC LIMIT %s",
-        (dataset, day, sessions),
+        " AND partition_date >= %s ORDER BY partition_date DESC LIMIT %s",
+        (dataset, day, day - timedelta(days=2 * sessions), sessions),
     ).fetchall()
     return [int(r[0]) for r in rows]
 

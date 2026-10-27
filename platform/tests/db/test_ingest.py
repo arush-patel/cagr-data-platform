@@ -162,6 +162,27 @@ def test_row_count_outside_the_band_is_critical(
     assert result.rows_loaded > 0  # raw keeps what NSE sent; the run fails
 
 
+def test_row_count_ignores_files_from_long_before(
+    writer: Conn, storage: LocalStorage, nse_fixtures: Path
+) -> None:
+    # A backfill that starts mid-history: the only earlier files are years older.
+    run_id = start_run(writer, "manual")
+    for i in range(20):
+        day = UDIFF_DAY - timedelta(days=2000 + i)
+        writer.execute(
+            "INSERT INTO raw.vendor_file (feed_id, partition_date, url, sha256, bytes,"
+            " storage_uri, run_id, row_count) VALUES ('nse_cm_bhavcopy_udiff', %s, 'u', %s,"
+            " 1, 'file:///x', %s, 3000)",
+            (day, f"{i:064x}", run_id),
+        )
+    feed = load_feed(writer, "nse_cm_bhavcopy_udiff")
+    result = ingest_file(writer, storage, run_id=run_id, feed=feed, day=UDIFF_DAY,
+                         url=UDIFF_URL, content=(nse_fixtures / UDIFF).read_bytes())  # fmt: skip
+    assert result.critical == []
+    rc = next(o for o in result.outcomes if o.check_id == "row_count")
+    assert rc.observed["skipped"] == "no previous sessions"
+
+
 def test_index_close_on_a_weekend_is_a_special_session(
     writer: Conn, storage: LocalStorage, nse_fixtures: Path
 ) -> None:

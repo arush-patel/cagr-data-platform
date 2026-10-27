@@ -2,7 +2,8 @@
 
 - mcap{DDMMYYYY}.csv, from 1 Feb 2024: every security's issue size and market cap. Fields are
   padded with spaces, dates read `01 FEB 2024`, and the last rows are totals (Listed,
-  Permitted, Total) with a blank series, which are dropped.
+  Permitted, Total) with a blank series, which are dropped. A security that has not traded
+  reads `Not Traded` for its last trade date, which becomes null.
 - Ix{DDMMYY}.csv and ffix{DDMMYY}.csv, 2010 to 2013: ISSUE_CAP of each index constituent, one
   row per index it belongs to. Each index's block starts with a section line (` , , ,<name>`)
   and a separator line, which are dropped. Ix is missing from some zips (2 Jan 2013 has only
@@ -22,6 +23,7 @@ import polars as pl
 from cagr_data.vendors.errors import FileShapeError, TradeDateMismatchError
 from cagr_data.vendors.nse.csvfile import body, cast, check_dates_parsed, header, parse_date, text
 
+NOT_TRADED = "not traded"
 PRICE = pl.Decimal(18, 4)
 CAP = pl.Decimal(24, 2)
 
@@ -87,6 +89,13 @@ def parse_mcap(content: bytes, expected_date: date | None = None) -> pl.DataFram
     if tuple(names) != MCAP_COLUMNS:
         raise FileShapeError(f"unexpected mcap header: {names}")
     raw = body(csv, names).filter(text("Series").is_not_null())
+    # A security that has never traded has the text "Not Traded" for its last trade date.
+    raw = raw.with_columns(
+        pl.when(text("Last Trade Date").str.to_lowercase() == NOT_TRADED)
+        .then(None)
+        .otherwise(pl.col("Last Trade Date"))
+        .alias("Last Trade Date")
+    )
     frame = raw.select(
         trade_date=parse_date("Trade Date", "%d %b %Y"),
         symbol=text("Symbol"),
