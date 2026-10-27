@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 
 from cagr.db import Connection
 from cagr_data.reference import review
+from cagr_observatory.connections import open_or_503
 from cagr_observatory.review import queries
 from cagr_observatory.review.models import Item, Kind
 from cagr_observatory.review.routes import item_row
@@ -37,14 +38,14 @@ def router(
 
     def decided(kind: Kind, item_id: int, decide: Callable[[Connection], None]) -> Item:
         try:
-            with connect_review() as conn:
+            with open_or_503(connect_review) as conn:
                 decide(conn)
                 conn.commit()
         except review.NotFound as exc:
             raise HTTPException(404, str(exc)) from exc
         except review.ReviewError as exc:
             raise HTTPException(409, str(exc)) from exc
-        with connect() as conn:
+        with open_or_503(connect) as conn:
             row = (queries.adjustment if kind == "adjustment" else queries.change)(conn, item_id)
             assert row is not None
             return item_row(conn, kind, row)

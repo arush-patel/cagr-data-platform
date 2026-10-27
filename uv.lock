@@ -213,6 +213,7 @@ dependencies = [
     { name = "cagr-toolkit" },
     { name = "fastapi" },
     { name = "pydantic-settings" },
+    { name = "python-dotenv" },
     { name = "uvicorn" },
 ]
 
@@ -222,6 +223,7 @@ requires-dist = [
     { name = "cagr-toolkit", editable = "toolkit" },
     { name = "fastapi", specifier = ">=0.115" },
     { name = "pydantic-settings", specifier = ">=2.6" },
+    { name = "python-dotenv", specifier = ">=1.0" },
     { name = "uvicorn", specifier = ">=0.32" },
 ]
 

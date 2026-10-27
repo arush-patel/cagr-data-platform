@@ -16,7 +16,7 @@ export function HealthBadge() {
     <span className="badge good">Database connected</span>
   ) : (
     <span className="badge bad" title={data.detail ?? undefined}>
-      Database unreachable
+      Database unreachable{data.detail ? `: ${data.detail}` : ""}
     </span>
   );
 }
