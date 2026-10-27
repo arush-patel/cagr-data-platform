@@ -180,6 +180,15 @@ Every result is written before a critical failure raises, so a failed run still 
 Before 2011 the holiday API has nothing. For those years the calendar comes from the archive: a
 weekday with a 404 next to published days is a holiday, recorded with `source = archive_proof`.
 
+How a day is classified, in order: a special session is a session on any day and wins over a
+holiday on the same date; a listed holiday is not a session, even on a weekend (reason
+`holiday`); otherwise weekend days are not sessions and weekdays are regular sessions.
+`session_index` counts from 1 Jan 2010, so the table is always rebuilt whole. `is_week_end` and
+`is_month_end` mark the last session of an ISO week (Monday to Sunday) or a month, and are left
+false while that week or month is still open at the end of the built range. A 404 only counts as
+archive proof of a holiday between two days that have files, so tonight's late file is never
+read as a holiday.
+
 ### 6.3 `raw`: what NSE sent
 
 | Table | Purpose | Key columns |
@@ -337,7 +346,7 @@ Each task is one short branch and one PR into main.
 | 0 | Source spike, run on a machine that can reach NSE (Arush's laptop or the VM) | Done 26 Oct 2026: `0001-source-check.md`, fixtures in `platform/tests/fixtures/nse/`, section 4 corrected |
 | 1 | Repo skeleton | uv workspace, `platform` package, ruff, mypy, pytest, CI with Postgres 17, `docs/` |
 | 2 | Migrations 0001 to 0004 | `ops`, `ref`, `raw` schemas, seeds for venue, vendors, feeds, formats and checks, grants for the three roles |
-| 3 | NSE client and bhavcopy parsers (both formats) | Tested against fixtures |
+| 3 | NSE client and bhavcopy parsers (both formats) | Done 27 Oct 2026 (PR #8) |
 | 4 | Index close, holidays, masters and symbol-change parsers; calendar builder | Tested |
 | 5 | Receipts, storage, loaders, check runner | DB scenario tests |
 | 6 | Dagster assets, partitions, schedule, asset checks | Runs locally with `dagster dev` |
