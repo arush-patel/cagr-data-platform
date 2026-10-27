@@ -41,7 +41,7 @@ packages = ["cagr_data", "cagr"]
 mypy_path = "platform/src:toolkit/src"
 
 [[tool.mypy.overrides]]
-module = ["yoyo", "yoyo.*"]
+module = ["yoyo", "yoyo.*", "xlsxwriter", "xlsxwriter.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
