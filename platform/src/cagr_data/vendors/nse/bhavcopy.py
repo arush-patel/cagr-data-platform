@@ -19,6 +19,7 @@ from typing import Literal
 import polars as pl
 
 from cagr_data.vendors.errors import FileShapeError, TradeDateMismatchError
+from cagr_data.vendors.nse.csvfile import body, cast, header, text
 
 Format = Literal["udiff_v1", "legacy_v1"]
 
@@ -71,40 +72,8 @@ def read_zip(content: bytes) -> bytes:
         raise FileShapeError(f"not a zip file: {e}") from e
 
 
-def _header(csv: bytes) -> list[str]:
-    first = csv.split(b"\n", 1)[0].decode("utf-8-sig").rstrip("\r")
-    names = [n.strip() for n in first.split(",")]
-    if names and names[-1] == "":  # a trailing comma
-        names.pop()
-    return names
-
-
-def _body(csv: bytes, names: list[str]) -> pl.DataFrame:
-    """Every field as text, named by position; the trailing empty field, if any, is dropped."""
-    frame = pl.read_csv(
-        io.BytesIO(csv),
-        has_header=False,
-        skip_rows=1,
-        infer_schema=False,
-        truncate_ragged_lines=True,
-    )
-    if frame.width < len(names):
-        raise FileShapeError(f"rows have {frame.width} fields, header names {len(names)}")
-    extra = frame.columns[len(names) :]
-    if extra and frame.select(pl.any_horizontal(pl.col(extra).is_not_null())).to_series().any():
-        raise FileShapeError(f"rows have {frame.width} fields, header names {len(names)}")
-    return frame.drop(extra).rename(dict(zip(frame.columns, names, strict=False)))
-
-
-def _text(name: str) -> pl.Expr:
-    return pl.col(name).str.strip_chars().replace("", None)
-
-
 def _cast(frame: pl.DataFrame) -> pl.DataFrame:
-    try:
-        return frame.select([pl.col(c).cast(t) for c, t in BAR_SCHEMA.items()])
-    except pl.exceptions.InvalidOperationError as e:
-        raise FileShapeError(f"a value does not fit its column: {e}") from e
+    return cast(frame, BAR_SCHEMA)
 
 
 def _check_date(frame: pl.DataFrame, expected: date | None) -> None:
@@ -116,25 +85,25 @@ def _check_date(frame: pl.DataFrame, expected: date | None) -> None:
 
 
 def parse_udiff(csv: bytes, expected_date: date | None = None) -> pl.DataFrame:
-    names = [_UDIFF_OLD_RESERVED.get(n, n) for n in _header(csv)]
+    names = [_UDIFF_OLD_RESERVED.get(n, n) for n in header(csv)]
     if tuple(names) != UDIFF_COLUMNS:
         raise FileShapeError(f"unexpected UDiFF header: {names}")
-    raw = _body(csv, names)
+    raw = body(csv, names)
     frame = raw.select(
-        trade_date=_text("TradDt").str.strptime(pl.Date, "%Y-%m-%d", strict=False),
-        symbol=_text("TckrSymb"),
-        series=_text("SctySrs").fill_null(""),
-        isin=_text("ISIN"),
-        instrument_type=_text("FinInstrmTp"),
-        open=_text("OpnPric"),
-        high=_text("HghPric"),
-        low=_text("LwPric"),
-        close=_text("ClsPric"),
-        last=_text("LastPric"),
-        prev_close=_text("PrvsClsgPric"),
-        volume=_text("TtlTradgVol"),
-        traded_value_inr=_text("TtlTrfVal"),
-        trade_count=_text("TtlNbOfTxsExctd"),
+        trade_date=text("TradDt").str.strptime(pl.Date, "%Y-%m-%d", strict=False),
+        symbol=text("TckrSymb"),
+        series=text("SctySrs").fill_null(""),
+        isin=text("ISIN"),
+        instrument_type=text("FinInstrmTp"),
+        open=text("OpnPric"),
+        high=text("HghPric"),
+        low=text("LwPric"),
+        close=text("ClsPric"),
+        last=text("LastPric"),
+        prev_close=text("PrvsClsgPric"),
+        volume=text("TtlTradgVol"),
+        traded_value_inr=text("TtlTrfVal"),
+        trade_count=text("TtlNbOfTxsExctd"),
         source_format=pl.lit("udiff_v1"),
     )
     frame = _cast(frame)
@@ -143,26 +112,26 @@ def parse_udiff(csv: bytes, expected_date: date | None = None) -> pl.DataFrame:
 
 
 def parse_legacy(csv: bytes, expected_date: date | None = None) -> pl.DataFrame:
-    names = _header(csv)
+    names = header(csv)
     if tuple(names) not in (LEGACY_COLUMNS, LEGACY_COLUMNS_2010):
         raise FileShapeError(f"unexpected legacy header: {names}")
-    raw = _body(csv, names)
+    raw = body(csv, names)
     has_isin = "ISIN" in names
     frame = raw.select(
-        trade_date=_text("TIMESTAMP").str.strptime(pl.Date, "%d-%b-%Y", strict=False),
-        symbol=_text("SYMBOL"),
-        series=_text("SERIES").fill_null(""),
-        isin=_text("ISIN") if has_isin else pl.lit(None, pl.String),
+        trade_date=text("TIMESTAMP").str.strptime(pl.Date, "%d-%b-%Y", strict=False),
+        symbol=text("SYMBOL"),
+        series=text("SERIES").fill_null(""),
+        isin=text("ISIN") if has_isin else pl.lit(None, pl.String),
         instrument_type=pl.lit(None, pl.String),
-        open=_text("OPEN"),
-        high=_text("HIGH"),
-        low=_text("LOW"),
-        close=_text("CLOSE"),
-        last=_text("LAST"),
-        prev_close=_text("PREVCLOSE"),
-        volume=_text("TOTTRDQTY"),
-        traded_value_inr=_text("TOTTRDVAL"),
-        trade_count=_text("TOTALTRADES") if has_isin else pl.lit(None, pl.String),
+        open=text("OPEN"),
+        high=text("HIGH"),
+        low=text("LOW"),
+        close=text("CLOSE"),
+        last=text("LAST"),
+        prev_close=text("PREVCLOSE"),
+        volume=text("TOTTRDQTY"),
+        traded_value_inr=text("TOTTRDVAL"),
+        trade_count=text("TOTALTRADES") if has_isin else pl.lit(None, pl.String),
         source_format=pl.lit("legacy_v1"),
     )
     frame = _cast(frame)
