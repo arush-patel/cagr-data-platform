@@ -45,6 +45,7 @@ jobs:
           cache: npm
           cache-dependency-path: observatory/web/package-lock.json
       - run: npm ci
+      - run: npm run api-types && git diff --exit-code src/api/schema.d.ts
       - run: npm run typecheck
       - run: npm run lint
       - run: npm test

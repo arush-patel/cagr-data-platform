@@ -3,13 +3,14 @@
 from collections.abc import Callable
 from pathlib import Path
 
-from fastapi import APIRouter, FastAPI
+from fastapi import APIRouter, FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from cagr import db
 from cagr_observatory import __version__
+from cagr_observatory.review import routes as review
 from cagr_observatory.settings import Settings
 
 
@@ -20,28 +21,25 @@ class Health(BaseModel):
     detail: str | None = None
 
 
-def database_ok() -> tuple[bool, str | None]:
-    try:
-        with db.connect_read() as conn:
-            conn.execute("SELECT 1")
-    except Exception as exc:  # any failure means the page can't read
-        return False, type(exc).__name__
-    return True, None
-
-
 def create_app(
     settings: Settings | None = None,
-    check_database: Callable[[], tuple[bool, str | None]] = database_ok,
+    connect: Callable[[], db.Connection] = db.connect_read,
 ) -> FastAPI:
+    """The app; connect opens a read-only connection (the toolkit's, unless a test swaps it)."""
     settings = settings or Settings()
     app = FastAPI(title="Observatory", version=__version__)
     api = APIRouter(prefix="/api")
 
     @api.get("/health")
     def health() -> Health:
-        ok, detail = check_database()
-        return Health(version=__version__, database=ok, detail=detail)
+        try:
+            with connect() as conn:
+                conn.execute("SELECT 1")
+        except Exception as exc:  # any failure means the page can't read
+            return Health(version=__version__, database=False, detail=type(exc).__name__)
+        return Health(version=__version__, database=True)
 
+    api.include_router(review.router(connect))
     app.include_router(api)
     if settings.web_dist.is_dir():
         serve_ui(app, settings.web_dist)
@@ -55,4 +53,6 @@ def serve_ui(app: FastAPI, dist: Path) -> None:
 
     @app.get("/{path:path}", include_in_schema=False)
     def ui(path: str) -> FileResponse:
+        if path.startswith("api/"):
+            raise HTTPException(404)
         return FileResponse(index)

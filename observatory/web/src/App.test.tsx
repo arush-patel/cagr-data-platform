@@ -1,31 +1,20 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { screen } from "@testing-library/react";
 
-import { App } from "./App";
-
-function renderAt(path: string, health: unknown) {
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(async () => new Response(JSON.stringify(health), { status: 200 })),
-  );
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  render(
-    <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={[path]}>
-        <App />
-      </MemoryRouter>
-    </QueryClientProvider>,
-  );
-}
+import { renderApp } from "./test-utils";
 
 test("the home page opens Review", async () => {
-  renderAt("/", { version: "0.1.0", database: true, detail: null });
-  expect(screen.getByRole("heading", { name: "Waiting" })).toBeInTheDocument();
+  renderApp("/", {
+    "/api/health": { version: "0.1.0", database: true, detail: null },
+    "/api/review/items?status=pending": [],
+  });
   expect(await screen.findByText("Database connected")).toBeInTheDocument();
+  expect(await screen.findAllByText("Nothing is waiting for review.")).not.toHaveLength(0);
 });
 
 test("says when the database can't be reached", async () => {
-  renderAt("/review", { version: "0.1.0", database: false, detail: "OperationalError" });
+  renderApp("/review", {
+    "/api/health": { version: "0.1.0", database: false, detail: "OperationalError" },
+  });
   expect(await screen.findByText("Database unreachable")).toBeInTheDocument();
+  expect(await screen.findByText(/The queue couldn't be loaded/)).toBeInTheDocument();
 });

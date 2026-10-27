@@ -17,6 +17,7 @@ export function App() {
         <Routes>
           <Route path="/" element={<Navigate to="/review" replace />} />
           <Route path="/review" element={<ReviewPage />} />
+          <Route path="/review/:kind/:id" element={<ReviewPage />} />
           <Route path="*" element={<p className="empty">No page here.</p>} />
         </Routes>
       </main>
