@@ -43,7 +43,7 @@ Every listing in the tradable universe has Arush's industry, **`cagr_industry`**
 2. A stock in the tradable universe without an industry goes on the Observatory review page,
    sorted by market cap, with NSE's sector shown as a hint. Arush picks its industry there.
 3. Until it has one, the stock has no industry and is left out of the industry indices. Stocks
-   below the universe floor don't need one.
+   that were never above the universe floor (₹1,500 crore, spec 0007) don't need one.
 4. The tier comes from NSE's constituent files, by ISIN.
 5. **One level only.** The coworker's 26 coarser groups are dropped.
 6. **A change restates history.** An industry change applies from the listing's first session,
@@ -83,7 +83,8 @@ Every listing in the tradable universe has Arush's industry, **`cagr_industry`**
 
 Each night, after the listing build:
 
-- Every active equity listing in the universe (market cap above the floor) with no industry
+- Every equity listing that has been in the universe on any day since 2010 (₹1,500 crore or
+  more, spec 0007), delisted ones included, with no industry
   gets one pending `industry_change` with no `industry_id`. Its evidence holds NSE's sector, if the stock is in a
   constituent file.
 - The review page lists them, largest first. Approving one means picking an industry; the page

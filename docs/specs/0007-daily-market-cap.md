@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft, 27 Oct 2026 |
+| Status | Agreed 27 Oct 2026 |
 | Date | 2026-10-27 |
 | Owner | Arush |
 | Component | `platform` (`cagr_data.vendors.nse`, `cagr_data.reference`, `cagr_data.clean`) |
@@ -49,6 +49,9 @@ industry review list and the cap-weighted industry indices all read it (decision
    buybacks and QIPs, which aren't corporate actions. It is task 5, after the rest works.
 4. Every value records where it came from (`source`), so a reader can tell a reported count
    from an estimate.
+5. **The universe** on day *d* is every equity listing with a market cap of ₹1,500 crore or more
+   on *d* (Q1). Delisted listings count on the days they traded (Q2), so they need a
+   `cagr_industry` too if they were ever in it.
 
 ## 4. Schema
 
@@ -88,9 +91,18 @@ For each listing, from its first reported count *S* going backwards:
 | Rights *a*:*b* | *S × b / (a + b)* |
 | Anything else, or a pending adjustment | unchanged; the period is marked in `evidence` |
 
-A listing that stopped trading before the first mcap file has no count to start from. It gets
-its last `Ix`/`ffix` count if it was an index member, and none otherwise. Those listings are
-counted in a check, not guessed.
+Delisted stocks stay in (Q2): we track historical stocks too, so the universe has no
+survivorship bias. A listing that stopped trading before the first mcap file has no 2024 count,
+so it is anchored on the nearest count it does have and walked **forward and backward** from
+there with the same rules:
+
+- its last `Ix`/`ffix` count, if it was an index member in 2010 to 2013;
+- its quarterly filing counts, once task 5 brings them in (from about 2021).
+
+A listing with none of these (delisted between 2014 and about 2021 and never an index member)
+has prices but no market cap. It can't be tested against the floor, so it is left out of the
+universe until a count is found, and `shares_present` lists every such listing with its last
+traded value, so we can see whether any of them would have mattered.
 
 ### 5.4 Checks
 
@@ -111,9 +123,9 @@ counted in a check, not guessed.
 | 4 | The `Ix`/`ffix` files for 2010 to 2013 and the cross-check | `walk_back_vs_index` reported |
 | 5 | Quarterly shareholding filings from about 2021 (option B) | Walk-back corrected at quarter ends |
 
-## 7. Open questions
+## 7. Questions
 
 | # | Question | Recommendation |
 |---|---|---|
-| Q1 | What market-cap floor defines the universe that needs a `cagr_industry`? | A rank: the top 1,000 by market cap on the day. A fixed rupee floor moves with the market, which skews backtests |
-| Q2 | Should a listing with no count before 2024 (delisted, never an index member) be left out of the industry indices? | Yes. It is counted by `shares_present`, so we can see how much history it affects |
+| Q1 | What market-cap floor defines the universe that needs a `cagr_industry`? | **Decided:** ₹1,500 crore or more on the day |
+| Q2 | Should delisted listings be left out of the industry indices? | **Decided:** no, they stay in. Historical and delisted stocks are tracked too (section 5.3) |
