@@ -94,10 +94,9 @@ def _fill(conn: psycopg.Connection[Any]) -> dict[str, int]:
         )
         close = 41.85 if d >= EX else 0.42
         conn.execute(
-            "INSERT INTO raw.nse_cm_bar (file_id, trade_date, symbol, series, isin, close,"
-            " source_format) VALUES (%s, %s, 'KAUSH', 'EQ', NULL, %s, 'udiff_v1'),"
-            " (%s, %s, 'KAUSH', 'T0', NULL, 999, 'udiff_v1')",
-            (file_id, d, close, file_id, d),
+            "INSERT INTO clean.bar_1d (listing_id, date, close, series, source_file_id)"
+            " VALUES (%s, %s, %s, 'EQ', %s)",
+            (kaush, d, close, file_id),
         )
     action = _one(
         conn,
@@ -238,7 +237,7 @@ def test_adjustment_detail_has_the_chart(client: TestClient, ids: dict[str, int]
     assert (item["isin_before"], item["isin_on"]) == ("INE000K01011", "INE000K01029")
     assert item["chart_factor"] == 100 and item["action"] is None
     bars = item["bars"]
-    assert len(bars) == 40  # 20 sessions either side; T0 rows never count
+    assert len(bars) == 40  # 20 sessions either side
     before = [b for b in bars if b["date"] < str(EX)]
     assert len(before) == 20 and before[-1] == {
         "date": "2024-02-05",
