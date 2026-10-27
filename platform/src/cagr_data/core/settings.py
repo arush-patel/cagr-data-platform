@@ -12,5 +12,8 @@ class Settings(BaseSettings):
     database_url: SecretStr | None = None
     """Connection string for the platform's database (cagr_test during the test phase)."""
 
+    pipeline_database_url: SecretStr | None = None
+    """The pipeline's login (cagr_writer); jobs and builders use it, migrations never do."""
+
     raw_root: Path = Path("data/raw")
     """Where original vendor files are kept: a local folder now, Azure Blob once deployed."""
