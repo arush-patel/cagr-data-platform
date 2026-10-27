@@ -227,6 +227,8 @@ Rules for `raw`:
 - **Both bhavcopy formats land in one table** with the same column names; `source_format` says
   which parser produced the row. Columns only one format has (UDiFF's instrument type, settlement
   price and so on) stay in the stored file and can be added later as new nullable columns.
+  A `last` of 0 is stored as null: legacy writes 0 on untraded bond rows where UDiFF leaves it
+  empty.
 - **Current view.** `raw.nse_cm_bar_current` and `raw.nse_index_close_current` show, per
   `trade_date`, only the rows of the latest revision. Downstream layers read these views.
 - **Partitioning.** `raw.nse_cm_bar` is range-partitioned by `trade_date`, one partition a year,
@@ -293,7 +295,7 @@ change.
 | `holiday_session` | A file on a listed holiday (expected only for Muhurat trading) | warn |
 | `benchmark_present` | Nifty 50 is in the index file | critical |
 | `prices_positive` | open, high, low, close > 0 where volume > 0 | warn |
-| `ohlc_order` | low ≤ open, close ≤ high | warn |
+| `ohlc_order` | low ≤ open, close ≤ high; open only for series T0, whose close is the normal segment's | warn |
 | `isin_present` | ISIN on every EQ-series row from 22 Jun 2011 | warn |
 | `vendor_revision` | A re-downloaded file differs from the stored one | warn |
 | `special_session` | A file arrived on a non-listed weekend day | info |
@@ -362,8 +364,8 @@ Each task is one short branch and one PR into main.
 | 3 | NSE client and bhavcopy parsers (both formats) | Done 27 Oct 2026 (PR #8) |
 | 4 | Index close, holidays, masters and symbol-change parsers; calendar builder | Done 27 Oct 2026 (PR #9) |
 | 5 | Receipts, storage, loaders, check runner | Done 27 Oct 2026 (PR #10) |
-| 6 | Dagster assets, partitions, schedule, asset checks | Runs locally with `dagster dev` |
-| 7 | Backfill Jun to Aug 2024 into `cagr_test`, then the full history | Acceptance results in the PR |
+| 6 | Dagster assets, partitions, schedule, asset checks | Done 27 Oct 2026 (PRs #11 to #13) |
+| 7 | Backfill Jun to Aug 2024 into `cagr_test`, then the full history | Trial done 27 Oct 2026; results in `0001-acceptance.md` |
 | 8 | Five nightly runs | Step one done; spec 0002 starts |
 
 ## 12. Decisions on the open questions (Arush, 26 Oct 2026)

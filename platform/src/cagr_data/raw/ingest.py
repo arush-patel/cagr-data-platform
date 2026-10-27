@@ -74,7 +74,7 @@ def _content_checks(
         return [
             qc.no_duplicates(frame, BAR_KEYS),
             qc.prices_positive(frame),
-            qc.ohlc_order(frame),
+            qc.ohlc_order(frame, checks["ohlc_order"].params if "ohlc_order" in checks else None),
             *([qc.isin_present(frame, day, checks["isin_present"].params)]
               if "isin_present" in checks else []),
             *([qc.row_count(frame.height, previous, rc.params)] if rc else []),

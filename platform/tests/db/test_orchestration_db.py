@@ -9,6 +9,7 @@ import httpx
 import psycopg
 import pytest
 
+from cagr_data.core.db import Connection
 from cagr_data.orchestration import assets
 from cagr_data.orchestration.backfill import backfill
 from cagr_data.orchestration.resources import NseClient, PlatformDatabase, RawStorage
@@ -183,3 +184,42 @@ def test_backfill_a_short_range(resources: dict[str, object], dagster_db: str) -
         ).fetchall()
     assert set(kinds) <= {("backfill",), ("manual",)}
     assert sessions == [(date(2024, 7, 8),)]
+
+
+class DroppingDatabase(PlatformDatabase):
+    """Refuses the first connection, like a tunnel that dropped and came back."""
+
+    def connect(self) -> Connection:
+        if not DROPS:
+            DROPS.append(True)
+            raise psycopg.OperationalError("connection refused")
+        return super().connect()
+
+
+DROPS: list[bool] = []
+
+
+def test_backfill_waits_for_the_database_and_reruns(
+    resources: dict[str, object], dagster_db: str
+) -> None:
+    DROPS.clear()
+    waits: list[bool] = []
+    resources = {**resources, "db": DroppingDatabase(url=dagster_db)}
+    failures = backfill(
+        date(2024, 7, 6), date(2024, 7, 6), resources, log=False,
+        reachable=lambda: bool(waits), wait=lambda ready: waits.append(True) or True,
+    )  # fmt: skip
+    assert waits == [True]
+    assert failures == []
+
+
+def test_backfill_gives_up_when_the_database_stays_away(
+    resources: dict[str, object], dagster_db: str
+) -> None:
+    DROPS.clear()
+    resources = {**resources, "db": DroppingDatabase(url=dagster_db)}
+    failures = backfill(
+        date(2024, 7, 6), date(2024, 7, 6), resources, log=False,
+        reachable=lambda: False, wait=lambda ready: False,
+    )  # fmt: skip
+    assert failures[0].startswith("2024-07-06 files")

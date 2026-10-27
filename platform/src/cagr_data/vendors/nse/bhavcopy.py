@@ -73,7 +73,11 @@ def read_zip(content: bytes) -> bytes:
 
 
 def _cast(frame: pl.DataFrame) -> pl.DataFrame:
-    return cast(frame, BAR_SCHEMA)
+    # Legacy writes a last price of 0 on untraded bond rows where UDiFF leaves it empty.
+    frame = cast(frame, BAR_SCHEMA)
+    return frame.with_columns(
+        last=pl.when(pl.col("last") == 0).then(None).otherwise(pl.col("last"))
+    )
 
 
 def _check_date(frame: pl.DataFrame, expected: date | None) -> None:
