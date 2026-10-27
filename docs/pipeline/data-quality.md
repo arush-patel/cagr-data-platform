@@ -62,7 +62,7 @@ pie showData
   outside T0's own high and low. The trial backfill found 6 such rows in June to August 2024.
 - **`holiday_session` and `special_session`** run when a session file arrives. Either one failing
   also records the day as a special session in `ref.calendar_exception`
-  (see [Trading calendar](../data/calendar.md)). Neither blocks.
+  (see [Trading calendar](../data-model/calendar.md)). Neither blocks.
 - **`file_arrived`** is evaluated by the `nse_session_complete` asset only when the calendar says
   the day is a session and the 22:30 IST deadline has passed. Datasets that do not publish on the
   day (index closes before 21 Feb 2012) are not expected.

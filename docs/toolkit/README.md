@@ -113,7 +113,7 @@ metrics.max_drawdown(curve)  # 0.0
 
 `Calendar(sessions, venue="XNSE")` holds a venue's session dates and answers questions in
 sessions, not weekdays. It does no I/O; `cagr.db.load_calendar` builds one from
-`ref.calendar_session` (see [Trading calendar](../data/calendar.md)).
+`ref.calendar_session` (see [Trading calendar](../data-model/calendar.md)).
 
 | Member | Returns |
 |---|---|

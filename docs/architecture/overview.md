@@ -129,7 +129,7 @@ flowchart LR
 ## Database roles
 
 Three logins, each with one job. The migrations grant exactly what each needs (details in
-[Database](../data/database.md#roles-and-privileges)).
+[Database](../data-model/database.md#roles-and-privileges)).
 
 | Role | Used by | Setting | Can |
 |---|---|---|---|

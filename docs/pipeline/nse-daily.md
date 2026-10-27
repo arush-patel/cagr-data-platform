@@ -234,7 +234,7 @@ The `storage_uri` in `raw.vendor_file` is the file's `file://` URI.
 `cagr_data.raw.loaders.load_rows` streams the parsed Polars frame into its table with `COPY ...
 FROM STDIN`, adding the receipt's `file_id` to every row. It only accepts the five raw row tables.
 Loading the same file twice fails on the primary key rather than duplicating rows. After a bar load
-it runs `ANALYZE raw.nse_cm_bar` (see [Database](../data/database.md#roles-and-privileges)).
+it runs `ANALYZE raw.nse_cm_bar` (see [Database](../data-model/database.md#roles-and-privileges)).
 
 ## Backfill
 
