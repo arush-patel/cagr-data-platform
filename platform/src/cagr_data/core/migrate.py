@@ -1,6 +1,8 @@
 """Apply the repository's SQL migrations (db/migrations) with yoyo.
 
-Run as the owner role (cagr_platform):
+Run as the owner role (cagr_platform). yoyo's own bookkeeping tables live in schema `yoyo`,
+which this creates: on PostgreSQL 15 and later an ordinary role cannot create tables in
+`public` (on Azure it is owned by azure_pg_admin), and every migration names its schema anyway.
 
     uv run python -m cagr_data.core.migrate            # uses CAGR_DATABASE_URL
     uv run python -m cagr_data.core.migrate --list     # show applied and pending
@@ -11,22 +13,35 @@ import sys
 from pathlib import Path
 
 from yoyo import get_backend, read_migrations
+from yoyo.backends import DatabaseBackend
 
 from cagr_data.core.settings import Settings
 
 MIGRATIONS_DIR = Path(__file__).resolve().parents[4] / "db" / "migrations"
+YOYO_SCHEMA = "yoyo"
 
 
 def _yoyo_url(database_url: str) -> str:
-    """yoyo picks its driver from the URL scheme; we use psycopg 3."""
+    """yoyo picks its driver from the URL scheme (we use psycopg 3), and its `schema` parameter
+    sets the search_path its own tables are created in."""
     for prefix in ("postgresql://", "postgres://"):
         if database_url.startswith(prefix):
-            return "postgresql+psycopg://" + database_url.removeprefix(prefix)
-    return database_url
+            database_url = "postgresql+psycopg://" + database_url.removeprefix(prefix)
+            break
+    separator = "&" if "?" in database_url else "?"
+    return f"{database_url}{separator}schema={YOYO_SCHEMA}"
+
+
+def _backend(database_url: str) -> DatabaseBackend:
+    backend = get_backend(_yoyo_url(database_url))
+    backend.execute(f"CREATE SCHEMA IF NOT EXISTS {YOYO_SCHEMA}")
+    backend.commit()
+    backend.init_database()  # get_backend made yoyo's lock table before the schema existed
+    return backend
 
 
 def pending(database_url: str, migrations_dir: Path = MIGRATIONS_DIR) -> list[str]:
-    backend = get_backend(_yoyo_url(database_url))
+    backend = _backend(database_url)
     migrations = read_migrations(str(migrations_dir))
     return [m.id for m in backend.to_apply(migrations)]
 
@@ -36,7 +51,7 @@ def apply(database_url: str, migrations_dir: Path = MIGRATIONS_DIR) -> list[str]
 
     Returns the ids applied, which is empty when the database is already current.
     """
-    backend = get_backend(_yoyo_url(database_url))
+    backend = _backend(database_url)
     migrations = read_migrations(str(migrations_dir))
     with backend.lock():
         to_apply = backend.to_apply(migrations)

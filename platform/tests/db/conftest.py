@@ -60,6 +60,10 @@ def create_migrated(admin_url: str, name: str) -> tuple[str, str, list[str]]:
             sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(sql.Identifier(name))
         )
         conn.execute(sql.SQL("CREATE DATABASE {} OWNER cagr_platform").format(sql.Identifier(name)))
+    with psycopg.connect(_with(admin_url, db=name), autocommit=True) as conn:
+        # As on Azure, where azure_pg_admin owns public: the owner role cannot create there.
+        conn.execute("ALTER SCHEMA public OWNER TO CURRENT_USER")
+        conn.execute("REVOKE CREATE ON SCHEMA public FROM PUBLIC")
     platform_url = _with(admin_url, user="cagr_platform", password=PLATFORM_PASSWORD, db=name)
     applied = migrate.apply(platform_url)
     return _with(admin_url, db=name), platform_url, applied
