@@ -69,7 +69,10 @@ the bar's date. Adjusted volume = unadjusted volume ÷ the same product.** The f
 - **A pending adjustment stops the listing's adjusted history.** While an adjustment event is
   pending in spec 0002, the adjusted view shows that listing's bars only up to the session before
   the ex-date. A feature on it then stops for a few days instead of seeing a false 50% drop.
-  Unadjusted bars are always complete.
+  Unadjusted bars are always complete. The view `clean.adjustment_hold` (`listing_id`,
+  `held_from`, `adjustment_id`) lists every listing whose adjusted bars are held this way. That
+  tells a reader "held for review" apart from "didn't trade", and tells the feature engine
+  which listings to recompute once a hold is released.
 - **Look-ahead.** Adjusted history uses every factor known today, as every vendor's adjusted
   series does. Price ratios such as returns are unaffected. A backtest that needs prices exactly
   as known on a past date reads the unadjusted view.
@@ -82,6 +85,7 @@ the bar's date. Adjusted volume = unadjusted volume ÷ the same product.** The f
 | `clean.adjustment_step` | table | `listing_id`, `valid_from`, `valid_to`, `cum_factor` |
 | `clean.bar_1d_unadjusted` | view | `listing_id`, `date`, `open`, `high`, `low`, `close`, `volume`, `value_traded`, `trade_count`, `series` |
 | `clean.bar_1d_adjusted` | view | the same column names with adjusted prices and volume, plus `adj_factor` |
+| `clean.adjustment_hold` | view | `listing_id`, `held_from` (the pending ex-date), `adjustment_id` |
 
 - Unadjusted prices are `numeric`, exactly as in raw. Adjusted prices and `adj_factor` are
   `double precision`.

@@ -191,10 +191,14 @@ each venue. NSE alone doesn't need it.
 |---|---|---|
 | `raw.nse_corporate_action` | row of an API response | `file_id`, `symbol`, `series`, `isin`, `company`, `subject`, `ex_date`, `record_date`, `face_value`, plus the other fields the response carries, as text |
 | `ref.corporate_action` | parsed action | `action_id`, `listing_id`, `ex_date`, `kind` (`split`, `bonus`, `consolidation`, `rights`, `demerger`, `dividend`, `buyback`, `other`), `ratio_new`, `ratio_old`, `cash_per_share`, `issue_price` (rights), `subject`, `parse_status` (`parsed`, `unparsed`), `source_file_id` |
-| `ref.price_adjustment` | ex-date that changed a listing's price basis | `listing_id`, `ex_date`, `factor` (multiplies prices before `ex_date`), `observed_factor`, `expected_factor`, `action_id` (null when nothing explains it), `status` (`applied`, `pending`, `rejected`), `auto`, `decided_by`, `note` |
+| `ref.price_adjustment` | ex-date that changed a listing's price basis | `adjustment_id` (rising identity), `listing_id`, `ex_date`, `factor` (multiplies prices before `ex_date`), `observed_factor`, `expected_factor`, `action_id` (null when nothing explains it), `status` (`applied`, `pending`, `rejected`), `auto`, `decided_by`, `applied_at`, `note` |
 
 `factor` is what spec 0003 multiplies into every price before the ex-date. Volumes are divided by
 it.
+
+A dataset records the adjustment state it used as one number: the highest `adjustment_id` among
+applied rows, together with the time it read them. A row's factor never changes after it is
+applied. A correction rejects the row and applies a new one with a higher id.
 
 ## 7. Corporate actions and adjustment factors
 
@@ -292,7 +296,7 @@ The toolkit reads only what this section lists, as `cagr_read`. Anything else ma
 | `ref.listing_symbol`, `ref.listing_isin` | dated symbols and ISINs |
 | `ref.listings_as_of(d date)` | a function returning `listing_id`, `symbol`, `isin`, `name`, `asset_class`, `board` for every listing that had traded by *d* and wasn't merged |
 | `ref.listing_by_symbol(symbol text, d date)` | the `listing_id` that had that symbol on *d*, or null |
-| `ref.price_adjustment` (applied rows) | factors by listing and ex-date, for readers who want to undo or redo adjustment themselves |
+| `ref.price_adjustment` (applied rows) | factors by listing and ex-date, for readers who want to undo or redo adjustment themselves. `max(adjustment_id)` over applied rows identifies the adjustment state |
 
 - Every row is keyed on the integer `listing_id`. Symbols and ISINs are attributes, never keys.
 - Point in time: as of *d*, as in section 6.
