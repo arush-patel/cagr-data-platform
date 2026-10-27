@@ -11,7 +11,9 @@ What the parsed numbers mean:
 - split and consolidation: ratio_old is the old face value, ratio_new the new one;
 - bonus and rights a:b: ratio_new = a new shares for every ratio_old = b held;
 - rights: issue_price is the face value plus the premium;
-- dividend: cash_per_share in rupees (a percentage is of the face value).
+- dividend: cash_per_share in rupees (a percentage is of the face value). An amount with a
+  leading zero and no decimal point (`Rs.0125`, GENESYS 2019, most likely Rs 0.125) is left
+  unparsed rather than guessed; `Rs 09` is read as 9.
 """
 
 import json
@@ -126,6 +128,7 @@ _RIGHTS = re.compile(
 _DIVIDEND = re.compile(r"\bdiv(?:idend)?\b", re.I)
 _CASH = re.compile(_RS + _NUM, re.I)
 _BARE_CASH = re.compile(r"^\s*-?\s*" + _NUM + r"\b")  # "Div-1.50" in 2010 wording
+_LOST_POINT = re.compile(r"0\d{2,}$")  # Rs.0125: a decimal point lost, so not read as 125
 _PERCENT = re.compile(_NUM + r"\s*%")
 _BUYBACK = re.compile(r"buy\s*-?\s*back", re.I)
 _DEMERGER = re.compile(r"de-?merger|scheme of arrangement", re.I)
@@ -153,7 +156,9 @@ def _dividends(part: str, face_value: Decimal | None) -> list[ParsedAction]:
     found = []
     for mark, following in zip(marks, [*marks[1:], None], strict=True):
         tail = part[mark.end() : following.start() if following else None]
-        if m := _CASH.search(tail):
+        if (m := _CASH.search(tail)) and _LOST_POINT.match(m[1]):
+            found.append(ParsedAction("dividend", parsed=False, part=part))
+        elif m:
             found.append(ParsedAction("dividend", cash_per_share=_d(m[1]), part=part))
         elif (m := _PERCENT.search(tail)) and face_value is not None:
             cash = (_d(m[1]) * face_value / 100).quantize(Decimal("0.0001"))

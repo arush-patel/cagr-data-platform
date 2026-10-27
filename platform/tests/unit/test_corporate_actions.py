@@ -80,6 +80,15 @@ def test_dividends(subject: str, cash: str) -> None:
     assert [a.cash_per_share for a in dividends] == [D(cash)]
 
 
+def test_an_amount_that_lost_its_decimal_point_is_unparsed() -> None:
+    # GENESYS 2019: "Rs.0125" (Rs 0.125 on a Rs 5 face value) is not read as Rs 125.
+    actions = parse_subject("Annual General Meeting/Dividend - Rs.0125 Per Share", D(5))
+    [a] = [a for a in actions if a.kind == "dividend"]
+    assert not a.parsed and a.cash_per_share is None
+    [nine] = parse_subject("Interim Dividend - Rs 09 Per Share", D(10))
+    assert nine.cash_per_share == D(9)
+
+
 def test_two_dividends_in_one_subject() -> None:
     actions = parse_subject(
         "Interim Dividend - Rs 2 Per Share / Special Dividend - Rs 5 Per Share", D(1)

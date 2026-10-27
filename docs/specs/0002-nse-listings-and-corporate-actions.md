@@ -249,8 +249,9 @@ NSE describes each action in free text, such as `Bonus 1:1`,
 is abbreviated (`Fv Split Rs.10 To Re.1`, `Bon 1:1/Fv Spl Rs.5tors.2`) and gets its own
 patterns. One subject can hold two actions, which become two rows. A parser with one pattern per kind
 turns the subject into a kind, a ratio, a cash amount and, for rights, an issue price. A subject
-that no pattern matches is stored as `unparsed`, with nothing guessed. Each pattern is tested on
-real subjects collected by the probe.
+that no pattern matches is stored as `unparsed`, with nothing guessed. So is a dividend amount
+with a leading zero and no decimal point (`Rs.0125`, GENESYS 2019, where NSE lost the point); a
+two-digit `Rs 09` is read as 9. Each pattern is tested on real subjects collected by the probe.
 
 ### 7.3 Where the factor comes from
 
@@ -269,7 +270,7 @@ The factor multiplies every price before the ex-date:
 | Consolidation | *F₂ / F₁* (above 1) |
 | Rights *a*:*b* at issue price *R* (face value plus premium) | *TERP / C*, where *C* is the close before the ex-date and *TERP = (b·C + a·R) / (a + b)* |
 | Demerger, capital reduction | From prices: the ex-date's first price divided by *C*. Always pending, so a person confirms |
-| Extraordinary dividend: cash *D* on one ex-date with *D / C* ≥ 2% | *(C − D) / C* (Q3). Every dividend on the same ex-date is summed first |
+| Extraordinary dividend: cash *D* on one ex-date with *D / C* ≥ 2% | *(C − D) / C* (Q3). Every dividend on the same ex-date is summed first. A dividend at or above the previous close (*D ≥ C*, a misread amount) is never applied: it is pending for review |
 | Ordinary dividend (*D / C* below 2%), buyback, AGM, interest | No adjustment (Q3). Recorded only |
 
 Each session, for each listing that traded, the step checks the evidence:

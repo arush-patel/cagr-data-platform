@@ -72,6 +72,12 @@ def test_dividends_adjust_only_from_two_percent() -> None:
     assert p is not None and p.status == "applied" and p.factor == pytest.approx(0.975)
 
 
+def test_a_dividend_at_or_above_the_close_waits_for_a_person() -> None:
+    # A misread amount (Rs 125 on a close of 81.95) must not become a negative factor.
+    p = decide(event(81.95, 79.95, act("dividend", cash="125")))
+    assert p is not None and (p.status, p.factor, p.expected) == ("pending", None, None)
+
+
 def test_demerger_and_unparsed_actions_wait_for_a_person() -> None:
     p = decide(event(100, 70, act("demerger")))
     assert p is not None and (p.status, p.factor) == ("pending", None)
