@@ -40,9 +40,8 @@ def admin_url() -> str:
     return url
 
 
-@pytest.fixture(scope="session")
-def migrated_db(admin_url: str) -> tuple[str, str, list[str]]:
-    """A fresh database with all migrations applied.
+def create_migrated(admin_url: str, name: str) -> tuple[str, str, list[str]]:
+    """Drop and create database name, owned by cagr_platform, with every migration applied.
 
     Returns its admin URL, the owner's (cagr_platform) URL and the migration ids applied.
     """
@@ -58,14 +57,25 @@ def migrated_db(admin_url: str) -> tuple[str, str, list[str]]:
                     )
                 )
         conn.execute(
-            sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(sql.Identifier(TEST_DB))
+            sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(sql.Identifier(name))
         )
-        conn.execute(
-            sql.SQL("CREATE DATABASE {} OWNER cagr_platform").format(sql.Identifier(TEST_DB))
-        )
-    platform_url = _with(admin_url, user="cagr_platform", password=PLATFORM_PASSWORD, db=TEST_DB)
+        conn.execute(sql.SQL("CREATE DATABASE {} OWNER cagr_platform").format(sql.Identifier(name)))
+    platform_url = _with(admin_url, user="cagr_platform", password=PLATFORM_PASSWORD, db=name)
     applied = migrate.apply(platform_url)
-    return _with(admin_url, db=TEST_DB), platform_url, applied
+    return _with(admin_url, db=name), platform_url, applied
+
+
+@pytest.fixture(scope="session")
+def migrated_db(admin_url: str) -> tuple[str, str, list[str]]:
+    """The shared test database; tests use it through `db`, in a transaction rolled back."""
+    return create_migrated(admin_url, TEST_DB)
+
+
+@pytest.fixture(scope="session")
+def dagster_db(admin_url: str) -> str:
+    """A second database for tests that commit (the Dagster assets do); its admin URL."""
+    url, _, _ = create_migrated(admin_url, "cagr_dagster_test")
+    return url
 
 
 @pytest.fixture

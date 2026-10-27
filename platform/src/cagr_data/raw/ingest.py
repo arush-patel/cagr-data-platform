@@ -140,13 +140,20 @@ def ingest_file(
 
 
 def check_arrived(conn: Connection, *, run_id: int, day: date) -> IngestResult:
-    """After the deadline on an expected session: are the datasets the check names present?"""
+    """After the deadline on an expected session: is there a file for each dataset the check
+    names that publishes on that day? (Index closes start on 21 Feb 2012.)"""
     checks = load_checks(conn)
     check = checks.get("file_arrived")
     if check is None:
         return IngestResult(None, 0)
+    published = conn.execute(
+        "SELECT DISTINCT dataset FROM raw.feed WHERE active AND dataset = ANY(%s)"
+        " AND (available_from IS NULL OR available_from <= %s)"
+        " AND (available_to IS NULL OR available_to >= %s)",
+        (check.params["datasets"], day, day),
+    ).fetchall()
     present = {}
-    for dataset in check.params["datasets"]:
+    for (dataset,) in published:
         row = conn.execute(
             "SELECT EXISTS (SELECT 1 FROM raw.vendor_file_current"
             " WHERE dataset = %s AND partition_date = %s)",
