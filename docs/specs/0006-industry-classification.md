@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Agreed 27 Oct 2026, waiting on the seed export |
+| Status | Agreed 27 Oct 2026; seed exported 27 Oct (tasks 1 and 2 built) |
 | Date | 2026-10-27 |
 | Owner | Arush |
 | Component | `platform` (`cagr_data.reference`), version 0.4.0 |
@@ -75,9 +75,15 @@ Every listing in the tradable universe has Arush's industry, **`cagr_industry`**
 
 1. On the laptop, read `script, group_3` from `script_master` once, read-only.
 2. Commit it as `db/seeds/group3_2026-10-27.csv`.
-3. A loader matches each symbol to a listing with `ref.listing_by_symbol(symbol, 2026-10-27)`.
-   Every match becomes an applied `industry_change` with `proposed_by = 'seed'`.
+3. A loader (`python -m cagr_data.reference.industry`) matches each symbol to the equity listing
+   that held it on 27 Oct 2026, or, for a stock delisted or renamed since, to the last listing
+   that held it. Every match becomes an applied `industry_change` with `proposed_by = 'seed'`,
+   effective from the listing's first session.
 4. Symbols with no listing are reported, not guessed.
+5. Values that aren't one of the 52 industries are reported and not loaded (decision 5). In the
+   export, 1,646 of 3,040 symbols carry one of the 52; 1,394 carry one of the coworker's 29
+   coarser groups, and DPSCLTD carries `re`, a typo. Any of them that enters the universe
+   becomes a review item like an unclassified stock.
 
 ### 5.2 New and unmapped stocks
 
