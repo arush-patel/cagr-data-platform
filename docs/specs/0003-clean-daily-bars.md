@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft for review. Open questions are in section 9. |
+| Status | Agreed. Arush answered the open questions on 27 Oct 2026 (section 9). |
 | Date | 2026-10-27 |
 | Owner | Arush |
 | Component | `platform` (`cagr_data.clean`), version 0.3.0 |
@@ -28,13 +28,13 @@ lab sees the same prices as the nightly engine and the Observatory.
 - `clean.bar_1d` for equities, ETFs, REITs and InvITs (from the bhavcopy) and for indices
   (from `ind_close_all`), since 2010.
 - Adjusted and unadjusted views over it, with the cumulative factor.
+- Stored weekly and monthly bars, `clean.bar_1w` and `clean.bar_1mo` (Q2, section 5.1).
 - The `clean`-layer checks.
 - A nightly build after the listings and adjustments of spec 0002, plus a full rebuild command.
 
 ### Out of scope
 
-- Weekly and monthly bars (Q2): the toolkit builds them from daily bars when it reads them.
-- Total-return (dividend-adjusted) prices (spec 0002, Q3).
+- Total-return prices. Only extraordinary dividends adjust prices (spec 0002, Q3).
 - The Yahoo cross-check (D2) and index history before NSE's archive (21 Feb 2012). Both are
   later specs.
 - The lake export (`bars/1d/venue=XNSE/year=YYYY/*.parquet`), which gets its own spec.
@@ -48,9 +48,11 @@ traded.**
   SM, ST, SZ, or the ETF, REIT or InvIT series). T0 rows are never a bar. A symbol is never in
   two of these series on the same day (checked over 2024 to 2026), so there is at most one row.
   The bar records which series it came from.
-- **No bar when it didn't trade.** A day with no row, or a row with zero volume, has no bar.
-  Nothing is carried forward. The toolkit gets sessions from `ref.calendar_session` and sees the
-  gap.
+- **Zero-volume rows are bars (Q1).** NSE prints a row for a listed stock that didn't trade,
+  with volume 0 and its prices at the previous close. That row is kept as a bar, so a reader can
+  tell "listed but not traded" (volume 0) from "not in the file" (no bar).
+- **No bar when there's no row.** Nothing is carried forward. The toolkit gets sessions from
+  `ref.calendar_session` and sees the gap.
 - **Only XNSE sessions.** That includes special sessions such as Saturday Budget days and Muhurat
   trading. A bar on a day the calendar doesn't call a session is a critical failure.
 - **Index bars** come from `ind_close_all`. Some indices have no open, high or low on some days.
@@ -95,6 +97,24 @@ the bar's date. Adjusted volume = unadjusted volume ÷ the same product.** The f
   in one transaction, so a rerun leaves the same rows.
 - `cagr_writer` writes `clean`. `cagr_read` can select from it.
 
+### 5.1 Weekly and monthly bars
+
+`clean.bar_1w` and `clean.bar_1mo` have one row per listing per week or month in which it has a
+daily bar. Weeks and months follow the calendar's `is_week_end` and `is_month_end` flags, so a
+holiday Friday ends the week on Thursday.
+
+| Column | Meaning |
+|---|---|
+| `listing_id`, `period_start`, `period_end` | the period's first and last XNSE session. Primary key `(listing_id, period_start)` |
+| `open`, `high`, `low`, `close`, `volume`, `value_traded`, `trade_count`, `session_count` | unadjusted: first open, highest high, lowest low, last close, sums, number of daily bars |
+| `adj_open`, `adj_high`, `adj_low`, `adj_close`, `adj_volume` | the same built from adjusted daily bars |
+| `complete` | false for the current week or month until its last session |
+| `adjustment_state` | the highest applied `adjustment_id` when the row was built |
+
+An adjusted period bar can't be a stored bar times one factor, because an ex-date can fall
+inside the week. So both forms are stored, and a new adjustment rebuilds every period bar of
+that listing. A period that has a held daily bar (section 4) gets null adjusted columns.
+
 ## 6. How it's built
 
 After spec 0002's listing and adjustment steps for session *d*:
@@ -102,9 +122,11 @@ After spec 0002's listing and adjustment steps for session *d*:
 1. Read *d*'s current raw rows (`raw.nse_cm_bar_current`, `raw.nse_index_close_current`).
 2. Map each row to its listing with `ref.listing_symbol` and `ref.listing_isin` as of *d*. A row
    in a listing series that doesn't map is a critical failure (it means 0002's step missed it).
-3. Pick one row per listing (section 3), drop zero-volume rows, and replace *d*'s bars.
+3. Pick one row per listing (section 3) and replace *d*'s bars.
 4. Rebuild `clean.adjustment_step` for listings whose adjustments changed today.
-5. Run the checks.
+5. Rebuild the week and month that contain *d*, and every weekly and monthly bar of a listing
+   whose adjustments changed today.
+6. Run the checks.
 
 The full rebuild (`python -m cagr_data.clean.rebuild 2010-01-01 2026-10-26`) runs the same steps
 for every session. It's also what a raw revision or a listing merge triggers, for the listings
@@ -115,7 +137,8 @@ and dates they touch.
 | Check | Severity | Passes when |
 |---|---|---|
 | `bar_on_session` | critical | every bar's date is an XNSE session |
-| `bars_complete` | critical | every traded raw row in a listing series produced exactly one bar |
+| `bars_complete` | critical | every raw row in a listing series produced exactly one bar |
+| `period_bars_match` | critical | each weekly and monthly bar agrees with its daily bars (open, high, low, close, volume, count) |
 | `bar_ohlc_order` | warn | low ≤ open, close ≤ high (the raw `ohlc_order` check, now per listing) |
 | `adjusted_jump` | warn | no adjusted close moves more than 25% in one session without an adjustment event. Circuit limits are 20% at most, so a bigger move usually means a missed action. Re-listings and first days are exempt |
 | `index_benchmark_present` | critical | Nifty 50 has a bar on every session since 21 Feb 2012 |
@@ -125,13 +148,13 @@ and dates they touch.
 | # | Task | Output |
 |---|---|---|
 | 1 | Migration: `clean` schema, tables, views, grants, checks | Objects in `cagr_test` |
-| 2 | Builder and full rebuild | Bars for all history; the checks pass or every warning is explained |
+| 2 | Builder and full rebuild, daily then weekly and monthly | Bars for all history; the checks pass or every warning is explained |
 | 3 | Dagster assets after spec 0002's, and the nightly run | Bars current every evening |
 | 4 | Toolkit read check with the toolkit thread | `cagr.data` reads adjusted and unadjusted bars for any listing and date |
 
 Acceptance in `cagr_test`:
 
-1. Every traded listing-series row since 2010 has one bar, and no bar is on a non-session.
+1. Every listing-series row since 2010 has one bar, and no bar is on a non-session.
 2. RELIANCE's adjusted close is continuous across 28 Oct 2024 (1:1 bonus), and its unadjusted
    close halves.
 3. Adjusted prices before a split match the unadjusted price × factor exactly for a sample of
@@ -142,6 +165,6 @@ Acceptance in `cagr_test`:
 
 | # | Question | Recommendation |
 |---|---|---|
-| Q1 | Should a zero-volume row be a bar? | No. The toolkit wants no bar on days a stock didn't trade, and a zero-volume row only repeats the previous close |
-| Q2 | Should weekly and monthly bars be stored? | Not now. The toolkit builds them from adjusted daily bars and the calendar's week-end and month-end flags. Store them later if reads get slow |
-| Q3 | While an adjustment is pending, should the adjusted view stop at the ex-date (section 4)? | Yes. A short gap is better than a false price jump in every feature |
+| Q1 | Should a zero-volume row be a bar? | **Decided:** yes, zero-volume candles are kept |
+| Q2 | Should weekly and monthly bars be stored? | **Decided:** yes, both are stored (section 5.1) |
+| Q3 | While an adjustment is pending, should the adjusted view stop at the ex-date (section 4)? | **Agreed** |
