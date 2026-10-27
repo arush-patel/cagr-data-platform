@@ -128,8 +128,14 @@ def build_calendar(
 def holiday_exceptions(
     holidays: pl.DataFrame, file_id: int | None = None, segment: str = "CM"
 ) -> list[CalendarException]:
-    """Holidays of one segment from a parsed holiday-master response (see vendors.nse.holidays)."""
-    rows = holidays.filter(pl.col("segment") == segment).sort("date").iter_rows(named=True)
+    """Holidays of one segment from a parsed holiday-master response (see vendors.nse.holidays).
+
+    NSE also lists trading days there: "Special Live Trading" (Sat 2 Mar 2024) is a session, so
+    it is left out. Muhurat trading stays a holiday; its file is recorded as a special session
+    with a holiday_session warning (section 7.2)."""
+    listed = holidays.filter(pl.col("segment") == segment)
+    trading = pl.col("description").str.contains(r"(?i)special live trading").fill_null(False)
+    rows = listed.filter(~trading).sort("date").iter_rows(named=True)
     return [
         CalendarException(
             date=r["date"],

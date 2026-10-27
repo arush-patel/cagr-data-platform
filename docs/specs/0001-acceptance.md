@@ -40,3 +40,31 @@ same-day settlement segment): BANKBARODA 3 Jun, ONGC 14 Jun, ASHOKLEY 28 Jun, MO
 VEDL 9 Jul, SBIN 19 Aug. In T0 the close is the normal segment's closing price. For example
 BANKBARODA had open, high and low of 289.75 and a close of 296.95. Migration 0006 now checks only
 the open for T0.
+
+## 2. Backfill, 1 Jan 2024 to 26 Oct 2026 (27 Oct 2026)
+
+This ran in three year chunks from 13:08 to 15:19 IST and every chunk exited 0. There were no
+waits for the database and no fetch errors. It wrote 1,543 files (142 MB) and no file has a
+second revision.
+
+| Year | Sessions | Weekend sessions | Bars (current view) | Index-close rows |
+|---|---|---|---|---|
+| 2024 | 249 | 20 Jan, 2 Mar, 18 May | 693,138 | 29,080 |
+| 2025 | 249 | 1 Feb (Budget) | 763,792 | 34,648 |
+| 2026 to 26 Oct | 201 | 1 Feb (Budget) | 691,207 | 30,946 |
+
+Every session has a UDiFF file and index-close file, and no file fell on a non-session.
+
+Warnings:
+
+- `ohlc_order`: 10. These are the T0 rows from step 1, checked before migration 0006. There
+  are none after it.
+- `special_session` (info): 10, for the four weekend sessions, one result per feed.
+- `holiday_session`: 5.
+  - Sat 2 Mar 2024 is listed as "Special Live Trading". Since this run that entry is no longer
+    read as a holiday.
+  - Tue 21 Oct 2025 is Diwali Muhurat trading. This is expected once a year (section 7.2) and
+    needs no code change. NSE leaves `morning_session` and `evening_session` empty even for
+    Muhurat, so the list can't tell us about the session ahead of time.
+
+In every case the calendar marks the day as a session.
