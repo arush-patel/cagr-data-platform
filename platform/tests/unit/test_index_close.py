@@ -107,3 +107,16 @@ def test_a_volume_with_a_zero_fraction_is_read(nse_fixtures: Path) -> None:
     assert frame["volume"][0] == 364190826
     with pytest.raises(FileShapeError):
         parse_index_close(csv.replace(b",364190826,", b",364190826.50,"), DAY)
+
+
+def test_month_first_dates_are_read_when_they_match(nse_fixtures: Path) -> None:
+    # Some Apr 2023 files write 6 Apr as 04-06-2023.
+    csv = (nse_fixtures / "ind_close_all_23102026.csv").read_bytes()
+    month_first = csv.replace(b"23-10-2026", b"04-06-2023")
+    frame = parse_index_close(month_first, date(2023, 4, 6))
+    assert frame["trade_date"].unique().to_list() == [date(2023, 4, 6)]
+    # Day-first wins when it matches, and a date matching neither reading is still a mismatch.
+    day_first = parse_index_close(csv.replace(b"23-10-2026", b"06-04-2023"), date(2023, 4, 6))
+    assert day_first["trade_date"].unique().to_list() == [date(2023, 4, 6)]
+    with pytest.raises(TradeDateMismatchError):
+        parse_index_close(month_first, date(2023, 4, 7))

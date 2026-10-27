@@ -3,6 +3,8 @@
 The header has been the same since the first file (21 Feb 2012). Index names are kept as sent:
 they change over the years (S&P CNX Nifty, then Nifty 50) and mapping them to a stable index is a
 later spec. The date is DD-MM-YYYY, or DD/MM/YYYY in some years (from Jun 2014); both are read.
+A few files are month-first (04-06-2023 for 6 Apr 2023); that reading is taken only when it gives
+the date in the file name and the day-first reading does not.
 An index repeated with identical values is kept once. Volume is a whole number, written with a
 zero fraction (179982752.00) in some files around 2015. Missing values are "-" (a points index has
 no open, high, low or valuation ratios). Turnover is in crores, as the file says; the loader does
@@ -49,9 +51,7 @@ def parse_index_close(csv: bytes, expected_date: date | None = None) -> pl.DataF
     raw = body(csv, names)
     frame = raw.select(
         # 09-06-2014 in most years, 09/06/2014 in some (from Jun 2014).
-        trade_date=text("Index Date")
-        .str.replace_all("/", "-")
-        .str.strptime(pl.Date, "%d-%m-%Y", strict=False),
+        trade_date=_trade_date(raw, expected_date),
         index_name=text("Index Name"),
         open=text("Open Index Value"),
         high=text("High Index Value"),
@@ -79,3 +79,17 @@ def parse_index_close(csv: bytes, expected_date: date | None = None) -> pl.DataF
     if expected_date is not None and frame.height and found != [expected_date]:
         raise TradeDateMismatchError(expected_date, found)
     return frame
+
+
+def _trade_date(raw: pl.DataFrame, expected_date: date | None) -> pl.Expr:
+    """Day-first, unless only the month-first reading matches the file name (Apr 2023)."""
+    dashed = text("Index Date").str.replace_all("/", "-")
+    day_first = dashed.str.strptime(pl.Date, "%d-%m-%Y", strict=False)
+    if expected_date is None or not raw.height:
+        return day_first
+    month_first = dashed.str.strptime(pl.Date, "%m-%d-%Y", strict=False)
+    readings = raw.select(day_first.alias("d"), month_first.alias("m"))
+    matches = readings.select((pl.all() == expected_date).fill_null(False).all())
+    if matches["m"].item() and not matches["d"].item():
+        return month_first
+    return day_first
