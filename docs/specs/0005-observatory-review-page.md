@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft for review. Open questions are in section 9. |
+| Status | Agreed. Arush answered the open questions on 27 Oct 2026 (section 9). |
 | Date | 2026-10-27 |
 | Owner | Arush |
 | Component | `observatory/`: Python API (`cagr-observatory`) and React UI, version 0.1.0 |
@@ -214,11 +214,11 @@ Each slice is one PR into main.
 | O3 | Decisions: migration 0008 (`cagr_reviewer`, after 0002's 0007), approve, reject, merge, History | The review module from spec 0002 task 5 |
 | O4 | Acceptance on the real pending list with Arush; docs page `docs/observatory/` | 0002 task 4 |
 
-## 9. Open questions
+## 9. Decisions (Arush, 27 Oct 2026)
 
-| # | Question | Recommendation |
+| # | Question | Decision |
 |---|---|---|
-| Q1 | Should the page record decisions straight away, through the platform's review module and a narrow `cagr_reviewer` login? The alternative is an inbox table the nightly pipeline applies later | Straight away. One code path with the command line, and you see the result at once |
-| Q2 | How does the page know who is deciding? | For now a setting, `CAGR_REVIEWER=arush`, while it runs only on your laptop. Sign-in (Microsoft, since Teams comes later) when it moves to the VM and a second person joins |
-| Q3 | Should the page let you type a different factor? | Not yet. Approve or reject only. With one reviewer, D16 would stop you approving your own factor anyway. A wrong factor is rejected and fixed from the command line |
-| Q4 | Is one chart per item (closes around the ex-date, unadjusted and adjusted) enough? | Yes. It shows at a glance whether the factor joins the two halves |
+| Q1 | Record decisions straight away, or through an inbox the nightly pipeline applies? | Straight away, through the platform's review module and the `cagr_reviewer` login |
+| Q2 | How does the page know who is deciding? | A setting, `CAGR_REVIEWER=arush`, while it runs only on the laptop. Sign-in (Microsoft) when it moves to the VM and a second reviewer joins |
+| Q3 | Can a person type a different factor on the page? | No. Approve or reject only. A wrong factor is rejected and fixed from the command line |
+| Q4 | Is one chart per item enough? | Yes |
