@@ -23,7 +23,8 @@ npm run typecheck && npm run lint && npm test && npm run build
 |---|---|---|
 | `platform/tests/unit/` | no | Parsers (on real NSE files), HTTP client, storage, checks, calendar, listing and adjustment rules, share counts, Dagster wiring |
 | `platform/tests/db/` | yes | Migrations, loading files, listings, corporate actions, clean bars, industry seed, review decisions |
-| `toolkit/tests/` | only `test_cagr_db.py` | Every toolkit module |
+| `toolkit/tests/` | only `test_cagr_db.py` and `test_cagr_data.py` | Every toolkit module, and its reads against the real schema |
+| `lab/tests/` | no | Every shared lab feature passes the look-ahead check |
 | `observatory/api/tests/` | `test_observatory_review_db.py` | The API and the review endpoints |
 | `observatory/web/src/` (`*.test.tsx`) | no | The UI |
 

@@ -21,6 +21,7 @@ flowchart LR
 |---|---|
 | `platform/` | The data platform package, `cagr_data` |
 | `toolkit/` | The shared library, `cagr` |
+| `lab/` | Research: shared features, label drafts and their tests |
 | `observatory/api/` | The web app's Python API, `cagr_observatory` |
 | `observatory/web/` | The web app's React UI (TypeScript) |
 | `db/migrations/` | Numbered SQL files that create every table |
@@ -48,8 +49,9 @@ are in (see [NSE daily pipeline](../pipeline/nse-daily.md#after-the-files-build-
 
 ## The toolkit: `cagr`
 
-Indicators, metrics, session arithmetic, train/test splits, feature declarations and read-only
-database access. See [Toolkit](../toolkit/README.md).
+Indicators, metrics, session arithmetic, train/test splits, feature declarations, analysts'
+formulas, datasets, Excel reports, and point-in-time reads of listings, bars and market cap. See
+[Toolkit](../toolkit/README.md).
 
 ## The Observatory
 

@@ -30,7 +30,7 @@ A shared Python library, `cagr`, has the indicators, metrics and tools every par
 | [Industry](data-model/industry.md) | Arush's 52 industries and how listings get one |
 | [NSE daily pipeline](pipeline/nse-daily.md) | What runs each night, how a file gets into the database, and the build commands |
 | [Data quality](pipeline/data-quality.md) | The checks on files, listings and bars |
-| [Toolkit](toolkit/README.md) | The `cagr` library's functions |
+| [Toolkit](toolkit/README.md) | The `cagr` library's functions, and the first shared features |
 | [Observatory](observatory/README.md) | The web app: the review page, how to run it |
 | [Running the platform](operations/running.md) | Settings, migrations, the pipeline, builds and backfills |
 | [Development](operations/development.md) | Tests, lint, CI and conventions |
@@ -38,7 +38,7 @@ A shared Python library, `cagr`, has the indicators, metrics and tools every par
 ## Not built yet
 
 These are not documented here: NSE index tiers (the table exists but nothing fills it), industry
-review on the Observatory, the 52 industry indices, the feature lake, the lab, and deployment to
+review on the Observatory, the 52 industry indices, the feature lake, the lab's notebooks, and deployment to
 the VM.
 
 ## Writing these pages
