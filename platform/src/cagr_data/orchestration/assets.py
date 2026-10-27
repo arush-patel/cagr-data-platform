@@ -49,6 +49,7 @@ INDEX_CHECKS = (
     "vendor_revision", "special_session",
 )  # fmt: skip
 SNAPSHOT_CHECKS = ("file_shape", "vendor_revision")
+PR_CHECKS = ("file_shape", "no_duplicates", "vendor_revision")
 
 
 def today_ist() -> date:
@@ -211,6 +212,36 @@ def nse_index_close(
     context: dg.AssetExecutionContext, db: PlatformDatabase, raw: RawStorage, nse: NseClient
 ) -> Iterator[dg.AssetCheckResult | Materialized]:
     yield from _session_asset(context, db, raw, nse, "nse_index_close", INDEX_CHECKS)
+
+
+@dg.asset(
+    partitions_def=daily,
+    check_specs=_specs("nse_mcap", PR_CHECKS),
+    group_name="nse",
+    description=(
+        "One session's shares outstanding and market cap (the PR zip's mcap file, from"
+        " 1 Feb 2024) in raw.nse_mcap"
+    ),
+)
+def nse_mcap(
+    context: dg.AssetExecutionContext, db: PlatformDatabase, raw: RawStorage, nse: NseClient
+) -> Iterator[dg.AssetCheckResult | Materialized]:
+    yield from _session_asset(context, db, raw, nse, "nse_mcap", PR_CHECKS)
+
+
+@dg.asset(
+    partitions_def=daily,
+    check_specs=_specs("nse_index_issue_cap", PR_CHECKS),
+    group_name="nse",
+    description=(
+        "One session's issued capital of index constituents (the PR zip's Ix and ffix files,"
+        " 2010 to 2013) in raw.nse_index_issue_cap"
+    ),
+)
+def nse_index_issue_cap(
+    context: dg.AssetExecutionContext, db: PlatformDatabase, raw: RawStorage, nse: NseClient
+) -> Iterator[dg.AssetCheckResult | Materialized]:
+    yield from _session_asset(context, db, raw, nse, "nse_index_issue_cap", PR_CHECKS)
 
 
 @dg.asset(

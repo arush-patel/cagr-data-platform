@@ -20,7 +20,7 @@ def test_all_migrations_apply_then_rerun_is_a_no_op(
     assert applied == [
         "0001_ops", "0002_ref_calendar", "0003_raw", "0004_seed_xnse", "0005_writer_maintain",
         "0006_ohlc_t0", "0007_ref_listings", "0008_reviewer", "0009_corporate_actions",
-        "0010_clean",
+        "0010_clean", "0011_market_cap",
     ]  # fmt: skip
     with psycopg.connect(url) as conn:
         owner = conn.execute(
@@ -65,6 +65,8 @@ def test_expected_tables_exist(db: Conn) -> None:
         "ref.listing", "ref.listing_change", "ref.listing_symbol", "ref.listing_isin",
         "ref.index_alias", "ref.corporate_action", "ref.price_adjustment", "ref.listing_current",
         "raw.nse_corporate_action", "raw.nse_etf_list", "raw.nse_corporate_action_current",
+        "raw.nse_mcap", "raw.nse_index_issue_cap", "raw.nse_mcap_current",
+        "raw.nse_index_issue_cap_current", "ref.listing_shares",
     }  # fmt: skip
 
 
@@ -74,8 +76,8 @@ def test_no_extensions_needed(db: Conn) -> None:
 
 
 def test_seeds(db: Conn) -> None:
-    assert db.execute("SELECT count(*) FROM raw.feed").fetchone() == (10,)
-    assert db.execute("SELECT count(*) FROM ops.dq_check").fetchone() == (27,)
+    assert db.execute("SELECT count(*) FROM raw.feed").fetchone() == (12,)
+    assert db.execute("SELECT count(*) FROM ops.dq_check").fetchone() == (31,)
     venue = db.execute("SELECT time_zone, weekend_days FROM ref.venue").fetchall()
     assert venue == [("Asia/Kolkata", [6, 7])]
     bhavcopy = db.execute(
@@ -158,7 +160,7 @@ def test_writer_records_runs_and_results(db: Conn) -> None:
 
 def test_reader_cannot_write(db: Conn) -> None:
     db.execute("SET ROLE cagr_read")
-    assert db.execute("SELECT count(*) FROM raw.feed").fetchone() == (10,)
+    assert db.execute("SELECT count(*) FROM raw.feed").fetchone() == (12,)
     with pytest.raises(errors.InsufficientPrivilege), db.transaction():
         db.execute("INSERT INTO ops.run (kind) VALUES ('manual')")
 

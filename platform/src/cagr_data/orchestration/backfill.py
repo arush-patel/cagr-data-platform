@@ -26,7 +26,13 @@ from dotenv import load_dotenv
 from cagr_data.orchestration import assets
 from cagr_data.orchestration.resources import PlatformDatabase
 
-FILE_ASSETS = (assets.nse_cm_bhavcopy, assets.nse_index_close)
+# The PR zip assets fetch only on days their feeds cover (2010 to 2013, and from 1 Feb 2024).
+FILE_ASSETS = (
+    assets.nse_cm_bhavcopy,
+    assets.nse_index_close,
+    assets.nse_mcap,
+    assets.nse_index_issue_cap,
+)
 WAIT_POLL_S = 15.0
 WAIT_LIMIT_S = 30 * 60.0
 RETRIES = 3

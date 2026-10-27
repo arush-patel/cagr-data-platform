@@ -12,7 +12,12 @@ from cagr_data.orchestration.resources import NseClient, PlatformDatabase, RawSt
 
 session_job = dg.define_asset_job(
     "nse_session",
-    selection=[assets.nse_cm_bhavcopy, assets.nse_index_close, assets.nse_session_complete],
+    selection=[
+        assets.nse_cm_bhavcopy,
+        assets.nse_index_close,
+        assets.nse_mcap,
+        assets.nse_session_complete,
+    ],
     partitions_def=assets.daily,
 )
 calendar_job = dg.define_asset_job(
@@ -63,6 +68,8 @@ defs = dg.Definitions(
     assets=[
         assets.nse_cm_bhavcopy,
         assets.nse_index_close,
+        assets.nse_mcap,
+        assets.nse_index_issue_cap,
         assets.nse_holidays,
         assets.xnse_calendar,
         assets.nse_equity_list,
