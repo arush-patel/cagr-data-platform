@@ -18,6 +18,7 @@ flowchart LR
 |---|---|
 | `platform/` | The data platform package, `cagr_data` |
 | `toolkit/` | The shared library, `cagr` |
+| `observatory/` | The web app: Python API and React UI |
 | `db/migrations/` | Numbered SQL files that create every table |
 | `docs/` | These pages, and `docs/specs/` for plans |
 | `.github/workflows/` | CI |

@@ -19,9 +19,10 @@ def imports(path: Path) -> set[str]:
     return names
 
 
-def test_the_toolkit_never_imports_the_platform() -> None:
+def test_the_toolkit_never_imports_the_platform_or_the_observatory() -> None:
     for path in SRC.rglob("*.py"):
-        assert not any(n.split(".")[0] == "cagr_data" for n in imports(path)), path.name
+        roots = {n.split(".")[0] for n in imports(path)}
+        assert not roots & {"cagr_data", "cagr_observatory"}, path.name
 
 
 def test_compute_and_definitions_do_no_io() -> None:
