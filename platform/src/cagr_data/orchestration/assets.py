@@ -45,8 +45,8 @@ BAR_CHECKS = (
     "prices_positive", "ohlc_order", "isin_present", "vendor_revision", "special_session",
 )  # fmt: skip
 INDEX_CHECKS = (
-    "file_shape", "trade_date_matches", "no_duplicates", "benchmark_present", "holiday_session",
-    "vendor_revision", "special_session",
+    "file_shape", "trade_date_matches", "index_conflict", "no_duplicates", "benchmark_present",
+    "holiday_session", "vendor_revision", "special_session",
 )  # fmt: skip
 SNAPSHOT_CHECKS = ("file_shape", "vendor_revision")
 PR_CHECKS = ("file_shape", "no_duplicates", "vendor_revision")

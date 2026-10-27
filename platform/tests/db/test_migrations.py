@@ -20,7 +20,7 @@ def test_all_migrations_apply_then_rerun_is_a_no_op(
     assert applied == [
         "0001_ops", "0002_ref_calendar", "0003_raw", "0004_seed_xnse", "0005_writer_maintain",
         "0006_ohlc_t0", "0007_ref_listings", "0008_reviewer", "0009_corporate_actions",
-        "0010_clean", "0011_market_cap", "0012_raw_archive", "0013_industry",
+        "0010_clean", "0011_market_cap", "0012_raw_archive", "0013_industry", "0014_index_conflict",
     ]  # fmt: skip
     with psycopg.connect(url) as conn:
         owner = conn.execute(
@@ -78,7 +78,7 @@ def test_no_extensions_needed(db: Conn) -> None:
 
 def test_seeds(db: Conn) -> None:
     assert db.execute("SELECT count(*) FROM raw.feed").fetchone() == (12,)
-    assert db.execute("SELECT count(*) FROM ops.dq_check").fetchone() == (33,)
+    assert db.execute("SELECT count(*) FROM ops.dq_check").fetchone() == (34,)
     venue = db.execute("SELECT time_zone, weekend_days FROM ref.venue").fetchall()
     assert venue == [("Asia/Kolkata", [6, 7])]
     bhavcopy = db.execute(

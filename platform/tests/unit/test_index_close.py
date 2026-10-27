@@ -5,7 +5,11 @@ from pathlib import Path
 import pytest
 
 from cagr_data.vendors.errors import FileShapeError, TradeDateMismatchError
-from cagr_data.vendors.nse.index_close import INDEX_CLOSE_SCHEMA, parse_index_close
+from cagr_data.vendors.nse.index_close import (
+    INDEX_CLOSE_SCHEMA,
+    parse_index_close,
+    split_conflicts,
+)
 
 FILE = "ind_close_all_23102026.csv"
 DAY = date(2026, 10, 23)
@@ -95,9 +99,18 @@ def test_an_exact_duplicate_row_is_kept_once(nse_fixtures: Path) -> None:
     once = parse_index_close(csv, DAY)
     twice = parse_index_close(b"".join([*lines[:2], lines[1], *lines[2:]]), DAY)
     assert twice.equals(once)
+
+
+def test_an_index_with_two_different_rows_is_split_off(nse_fixtures: Path) -> None:
+    # 8 Feb 2013 lists CNX Alpha Index twice with different closes; neither is loaded.
+    csv = (nse_fixtures / "ind_close_all_23102026.csv").read_bytes()
+    lines = csv.splitlines(keepends=True)
     changed = lines[1][:-3] + b"99" + lines[1][-1:]  # the same index, another div yield
-    with pytest.raises(FileShapeError):
-        parse_index_close(b"".join([*lines[:2], changed, *lines[2:]]), DAY)
+    frame = parse_index_close(b"".join([*lines[:2], changed, *lines[2:]]), DAY)
+    load, conflicts = split_conflicts(frame)
+    name = conflicts["index_name"][0]
+    assert conflicts.height == 2 and conflicts["index_name"].n_unique() == 1
+    assert load.height == 16 and name not in load["index_name"].to_list()
 
 
 def test_a_volume_with_a_zero_fraction_is_read(nse_fixtures: Path) -> None:

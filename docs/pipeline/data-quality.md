@@ -17,6 +17,7 @@ recorded and the run continues. All results are saved in `ops.dq_result`.
 | `prices_positive` | warning | Open, high, low and close are above 0 when volume is above 0 |
 | `ohlc_order` | warning | Low ≤ open, close ≤ high (for series T0, only the open is checked) |
 | `isin_present` | warning | Every EQ row has an ISIN (from 22 Jun 2011) |
+| `index_conflict` | warning | No index is listed twice with different values. If one is, that index gets no close for the day and the rest of the file loads (CNX Alpha Index on 8 Feb 2013) |
 | `holiday_session` | warning | No file arrived on a listed holiday |
 | `vendor_revision` | warning | NSE has not changed a file we already had |
 | `special_session` | info | No file arrived on an unlisted weekend day |
