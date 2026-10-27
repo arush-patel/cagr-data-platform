@@ -3,7 +3,8 @@
 The header has been the same since the first file (21 Feb 2012). Index names are kept as sent:
 they change over the years (S&P CNX Nifty, then Nifty 50) and mapping them to a stable index is a
 later spec. The date is DD-MM-YYYY, or DD/MM/YYYY in some years (from Jun 2014); both are read.
-An index repeated with identical values is kept once. Missing values are "-" (a points index has
+An index repeated with identical values is kept once. Volume is a whole number, written with a
+zero fraction (179982752.00) in some files around 2015. Missing values are "-" (a points index has
 no open, high, low or valuation ratios). Turnover is in crores, as the file says; the loader does
 not convert it.
 """
@@ -58,7 +59,7 @@ def parse_index_close(csv: bytes, expected_date: date | None = None) -> pl.DataF
         close=text("Closing Index Value"),
         points_change=text("Points Change"),
         pct_change=text("Change(%)"),
-        volume=text("Volume"),
+        volume=text("Volume").str.replace(r"\.0+$", ""),  # 179982752.00 in some 2015 files
         turnover_inr=text("Turnover (Rs. Cr.)"),
         pe=text("P/E"),
         pb=text("P/B"),
