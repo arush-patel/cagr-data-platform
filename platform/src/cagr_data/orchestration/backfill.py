@@ -8,6 +8,11 @@ day by day. Every partition is its own Dagster run, recorded in DAGSTER_HOME whe
 they show in `dagster dev`. Reads .env from the current folder. At 1 request a second a year
 takes about 12 minutes. Exits 1 if any partition failed, after listing them.
 
+Several backfills can run side by side over different years, each with `--rate 0.25` so NSE
+still sees at most one request a second in total; per-day overhead (a Dagster run and the
+database round trips) is most of the time, so this is nearly four times faster. Leave
+DAGSTER_HOME unset for parallel runs: its SQLite run storage is not meant for several writers.
+
 If a partition fails because the database is unreachable (the laptop's tunnel dropped), it waits
 for the database to come back and runs that partition again, rather than failing every day left.
 """
@@ -133,15 +138,23 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("start", type=date.fromisoformat)
     parser.add_argument("end", type=date.fromisoformat)
+    parser.add_argument(
+        "--rate", type=float, default=1.0,
+        help="requests a second to NSE; several backfills side by side share the 1 a second",
+    )  # fmt: skip
     args = parser.parse_args(argv)
+    if not 0 < args.rate <= 1:
+        parser.error("--rate must be above 0 and at most 1")
     if args.end < args.start:
         parser.error("end is before start")
 
     load_dotenv(".env")
     from cagr_data.orchestration.definitions import RESOURCES  # reads the environment
+    from cagr_data.orchestration.resources import NseClient
 
     instance = dg.DagsterInstance.get() if os.environ.get("DAGSTER_HOME") else None
-    failures = backfill(args.start, args.end, RESOURCES, instance=instance)
+    resources = {**RESOURCES, "nse": NseClient(rate_limit_per_s=args.rate)}
+    failures = backfill(args.start, args.end, resources, instance=instance)
     print(f"\n{len(failures)} failure(s)" + "".join(f"\n  {f}" for f in failures))
     return 1 if failures else 0
 
