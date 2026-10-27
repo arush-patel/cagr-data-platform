@@ -341,3 +341,26 @@ def test_archive_packs_a_month_and_reads_back(
     assert storage.get(str(uri)) == content
     assert not Path(unquote(loose.removeprefix("file://"))).exists()
     assert archive(writer, storage, date(2024, 9, 1)).months == 0  # nothing loose is left
+
+
+def test_an_index_listed_twice_differently_is_left_out_with_a_warning(
+    writer: Conn, storage: LocalStorage, nse_fixtures: Path
+) -> None:
+    run_id = start_run(writer, "manual")
+    feed = load_feed(writer, "nse_index_close")
+    day = date(2026, 10, 23)
+    lines = (nse_fixtures / INDEX).read_bytes().splitlines(keepends=True)
+    auto = next(line for line in lines if line.startswith(b"Nifty Auto,"))
+    content = b"".join([*lines, auto.replace(b",24862.3,", b",1572.9,")])
+    result = ingest_file(writer, storage, run_id=run_id, feed=feed, day=day,
+                         url=INDEX_URL, content=content)  # fmt: skip
+    assert result.critical == []
+    conflict = next(o for o in result.outcomes if o.check_id == "index_conflict")
+    assert not conflict.passed and conflict.observed["rows"] == 2
+    name = conflict.observed["indices"][0]
+    loaded = writer.execute(
+        "SELECT count(*), count(*) FILTER (WHERE index_name = %s) FROM raw.nse_index_close",
+        (name,),
+    ).fetchone()
+    assert loaded == (16, 0)
+    assert _results(writer, run_id)["index_conflict"] is False

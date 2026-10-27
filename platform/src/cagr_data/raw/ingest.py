@@ -22,6 +22,7 @@ from cagr_data.reference.calendar import (
     record_exceptions,
 )
 from cagr_data.vendors.errors import VendorFileError
+from cagr_data.vendors.nse.index_close import split_conflicts
 
 VENUE = "XNSE"
 BAR_KEYS = ("symbol", "series")
@@ -119,6 +120,10 @@ def ingest_file(
         outcomes = qc.parse_outcomes(e)
         critical = record(conn, checks, run_id=run_id, day=day, outcomes=outcomes)
         return IngestResult(None, 0, outcomes, critical)
+    parsed: list[qc.Outcome] = []
+    if feed.dataset == "nse_index_close":
+        frame, conflicts = split_conflicts(frame)
+        parsed.append(qc.index_conflict(conflicts))
 
     receipt = receive(
         conn,
@@ -141,6 +146,7 @@ def ingest_file(
 
     outcomes = [
         *qc.parse_outcomes(None),
+        *parsed,
         *_content_checks(conn, checks, feed, day, frame),
         qc.vendor_revision(receipt.revision, receipt.supersedes_file_id),
     ]

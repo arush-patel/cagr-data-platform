@@ -48,6 +48,12 @@ def parse_outcomes(error: VendorFileError | None) -> list[Outcome]:
     return [Outcome("file_shape", True), Outcome("trade_date_matches", True)]
 
 
+def index_conflict(conflicts: pl.DataFrame) -> Outcome:
+    """Indices listed twice with different values; neither row was loaded."""
+    names = sorted(set(conflicts["index_name"].to_list())) if conflicts.height else []
+    return Outcome("index_conflict", not names, {"indices": names, "rows": conflicts.height})
+
+
 def no_duplicates(frame: pl.DataFrame, keys: Sequence[str]) -> Outcome:
     dupes = frame.filter(pl.struct(list(keys)).is_duplicated()).unique(subset=list(keys))
     return Outcome(

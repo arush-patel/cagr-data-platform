@@ -5,10 +5,11 @@ they change over the years (S&P CNX Nifty, then Nifty 50) and mapping them to a 
 later spec. The date is DD-MM-YYYY, or DD/MM/YYYY in some years (from Jun 2014); both are read.
 A few files are month-first (04-06-2023 for 6 Apr 2023); that reading is taken only when it gives
 the date in the file name and the day-first reading does not.
-An index repeated with identical values is kept once. Volume is a whole number, written with a
-zero fraction (179982752.00) in some files around 2015. Missing values are "-" (a points index has
-no open, high, low or valuation ratios). Turnover is in crores, as the file says; the loader does
-not convert it.
+An index repeated with identical values is kept once; one repeated with different values (CNX
+Alpha Index on 8 Feb 2013) is left in, and ingest drops it with an index_conflict warning.
+Volume is a whole number, written with a zero fraction (179982752.00) in some files around 2015.
+Missing values are "-" (a points index has no open, high, low or valuation ratios). Turnover is
+in crores, as the file says; the loader does not convert it.
 """
 
 from datetime import date
@@ -70,15 +71,18 @@ def parse_index_close(csv: bytes, expected_date: date | None = None) -> pl.DataF
     if frame["trade_date"].null_count() or frame["index_name"].null_count():
         raise FileShapeError("rows without an index name or date")
     # An index can appear twice, byte for byte (GSEC10 NSE Index on 15 Sep 2014); keep one.
-    # Two different rows for one index are a shape error rather than a guess.
     frame = frame.unique(maintain_order=True)
-    if frame["index_name"].is_duplicated().any():
-        name = frame.filter(frame["index_name"].is_duplicated())["index_name"][0]
-        raise FileShapeError(f"two different rows for index {name!r}")
     found = sorted(frame["trade_date"].unique().to_list())
     if expected_date is not None and frame.height and found != [expected_date]:
         raise TradeDateMismatchError(expected_date, found)
     return frame
+
+
+def split_conflicts(frame: pl.DataFrame) -> tuple[pl.DataFrame, pl.DataFrame]:
+    """(rows to load, rows of indices listed twice with different values). Which row is the
+    real index is not guessed: neither is loaded (CNX Alpha Index on 8 Feb 2013)."""
+    conflicting = frame["index_name"].is_duplicated()
+    return frame.filter(~conflicting), frame.filter(conflicting)
 
 
 def _trade_date(raw: pl.DataFrame, expected_date: date | None) -> pl.Expr:
