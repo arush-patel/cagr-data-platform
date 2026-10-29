@@ -135,3 +135,4 @@ traded value, so we can see whether any of them would have mattered.
 |---|---|---|
 | Q1 | What market-cap floor defines the universe that needs a `cagr_industry`? | **Decided:** ₹1,500 crore or more on the day |
 | Q2 | Should delisted listings be left out of the industry indices? | **Decided:** no, they stay in. Historical and delisted stocks are tracked too (section 5.3) |
+| Q3 | How do we estimate counts between 2013 and Feb 2024, when no report exists? | **Decided 29 Oct 2026:** spread the change the actions don't explain evenly across the gap (source `spread`) |

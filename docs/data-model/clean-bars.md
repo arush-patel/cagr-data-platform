@@ -54,11 +54,19 @@ is decided, rebuild and they come back.
 |---|---|
 | `nse_mcap`: NSE's mcap file | Every security, from 1 Feb 2024 |
 | `index_file`: the Ix and ffix files | Index members, 2010 to 2013 |
-| `walk_back`: worked out from corporate actions | Days between reports, including 2014 to Jan 2024 |
+| `walk_back`: worked out from corporate actions | Days before the first report, after the last, and short gaps between reports |
+| `spread`: corporate actions plus the unexplained change, spread | Gaps of a quarter or more between reports, mostly 2014 to Jan 2024 |
 
 On a day without a report, the count is worked out from the nearest report through the listing's
 applied corporate actions. Splits, bonuses and consolidations change it by their ratio, and rights
 issues as if fully taken up.
+
+Across a long gap, the two reports often disagree by more than the actions explain: a PSU bank's
+recapitalisation, or a rights issue NSE didn't announce as one. That unexplained change is spread
+evenly (in log terms) from the earlier report to the later one, a step each quarter, so the count
+meets the later report. Its first period carries `next_report_ratio`, and each spread period
+`spread_ratio`. These counts use the later report, so before 2024 they carry some hindsight; the
+quarterly filings (spec 0007, task 5) will replace them from about 2021.
 
 `clean.market_cap_1d` is that day's unadjusted close times that day's share count. Both are as of
 the same day, so no adjustment is needed. Market cap is in rupees.

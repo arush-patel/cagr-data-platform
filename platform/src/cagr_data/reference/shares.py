@@ -7,8 +7,10 @@ Reported counts come from NSE's mcap file (from 1 Feb 2024) and the index files'
 filled by walking from the nearest report through the listing's applied corporate actions:
 backwards from the next later report, or forwards from the last one when none comes later.
 Splits, consolidations and bonuses change the count by their ratio, rights by their ratio as if
-fully taken up, and an applied clean-ratio jump with no action by its factor. The periods are
-rebuilt as a whole each run, in the caller's transaction.
+fully taken up, and an applied clean-ratio jump with no action by its factor. Across a gap of a
+quarter or more between two reports (2013 to Feb 2024), the change the actions don't explain (a
+fresh issue, a buyback) is spread evenly in log terms, a step each quarter, as source `spread`.
+The periods are rebuilt as a whole each run, in the caller's transaction.
 """
 
 import sys
@@ -28,6 +30,7 @@ from cagr_data.reference.listings import LISTING_SERIES
 
 STRUCTURAL = frozenset({"split", "consolidation", "bonus"})
 DAY = timedelta(days=1)
+SPREAD_FROM = timedelta(days=90)  # a shorter gap between reports keeps the walk-back
 
 
 @dataclass(frozen=True)
@@ -83,6 +86,36 @@ def _walk_back(shares: float, events: Sequence[Event]) -> list[tuple[date, int]]
     return out
 
 
+def _quarter_starts(lo: date, hi: date) -> list[date]:
+    """The first days of quarters strictly between lo and hi."""
+    out = []
+    q = date(lo.year, (lo.month - 1) // 3 * 3 + 1, 1)
+    while q < hi:
+        if q > lo:
+            out.append(q)
+        q = date(q.year + q.month // 10, (q.month + 2) % 12 + 1, 1)
+    return out
+
+
+def _spread(run: Run, nxt: Run, gap: Sequence[Event], ratio: float) -> list[Period]:
+    """From the end of one report to the next: the known actions, and the change they don't
+    explain (ratio) growing evenly in log terms, so the count meets the next report."""
+    span = (nxt.start - run.end).days
+    bounds = sorted({e.ex_date for e in gap} | set(_quarter_starts(run.end, nxt.start)))
+    out = [Period(run.start, bounds[0] if bounds else nxt.start, run.shares, run.source,
+                  {"next_report_ratio": ratio})]  # fmt: skip
+    for i, b in enumerate(bounds):
+        known = 1.0
+        for e in gap:
+            if e.ex_date <= b:
+                known *= e.multiplier
+        weight = (b - run.end).days / span
+        out.append(Period(b, bounds[i + 1] if i + 1 < len(bounds) else nxt.start,
+                          round(run.shares * known * ratio**weight), "spread",
+                          {"spread_ratio": round(ratio, 6)}))  # fmt: skip
+    return out
+
+
 def build_periods(first_session: date, runs: Sequence[Run], events: Sequence[Event],
                   pending: Sequence[date] = ()) -> list[Period]:  # fmt: skip
     """A listing's periods from its reported runs and its share events."""
@@ -124,6 +157,9 @@ def build_periods(first_session: date, runs: Sequence[Run], events: Sequence[Eve
         # explains (a fresh issue, a buyback), placed where the gap's first event or the next
         # report begins.
         walked = counts[date.min]
+        if walked != run.shares and nxt.start - run.end >= SPREAD_FROM:
+            out.extend(_spread(run, nxt, gap, walked / run.shares))
+            continue
         evidence = {} if walked == run.shares else {"next_report_ratio": walked / run.shares}
         ex_dates = [e.ex_date for e in gap]
         out.append(Period(run.start, ex_dates[0] if gap else nxt.start, run.shares, run.source,
