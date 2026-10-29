@@ -87,9 +87,9 @@ def scope_adjustments(
 ) -> tuple[int, int]:
     """Set aside the pending adjustments outside the tracked universe and bring back the
     out_of_scope ones inside it, in the caller's transaction. Returns (set_aside, restored)."""
-    conn.execute(
+    # One statement, so the pipeline login needs no temporary tables.
+    rows = conn.execute(
         """
-        CREATE TEMP TABLE adjustment_scope ON COMMIT DROP AS
         WITH items AS (
             SELECT p.adjustment_id, p.listing_id, p.ex_date, p.status
               FROM ref.price_adjustment p
@@ -97,38 +97,30 @@ def scope_adjustments(
         big AS (
             SELECT DISTINCT m.listing_id FROM clean.market_cap_1d m
              WHERE m.listing_id IN (SELECT listing_id FROM items)
-               AND m.market_cap_inr >= %(floor)s)
-        SELECT i.adjustment_id, i.status,
-               coalesce(t.reason = 'eq_main' AND e.series = 'EQ'
-                        AND i.listing_id IN (SELECT listing_id FROM big), false) AS in_scope
-          FROM items i
-          LEFT JOIN ref.tracked_listing t USING (listing_id)
-          LEFT JOIN LATERAL (
-              SELECT b.series FROM clean.bar_1d b
-               WHERE b.listing_id = i.listing_id AND b.date >= i.ex_date
-                 AND b.date < i.ex_date + %(window)s
-               ORDER BY b.date LIMIT 1) e ON true
-        """,
-        {"floor": floor_inr, "window": EVENT_WINDOW_DAYS},
-    )
-    set_aside = conn.execute(
-        """
+               AND m.market_cap_inr >= %(floor)s),
+        scope AS (
+            SELECT i.adjustment_id, i.status,
+                   coalesce(t.reason = 'eq_main' AND e.series = 'EQ'
+                            AND i.listing_id IN (SELECT listing_id FROM big), false) AS in_scope
+              FROM items i
+              LEFT JOIN ref.tracked_listing t USING (listing_id)
+              LEFT JOIN LATERAL (
+                  SELECT b.series FROM clean.bar_1d b
+                   WHERE b.listing_id = i.listing_id AND b.date >= i.ex_date
+                     AND b.date < i.ex_date + %(window)s
+                   ORDER BY b.date LIMIT 1) e ON true)
         UPDATE ref.price_adjustment p
-           SET status = 'out_of_scope', decided_by = %s, decided_at = now()
-          FROM adjustment_scope s
-         WHERE s.adjustment_id = p.adjustment_id AND s.status = 'pending' AND NOT s.in_scope
+           SET status = CASE WHEN s.in_scope THEN 'pending' ELSE 'out_of_scope' END,
+               decided_by = CASE WHEN s.in_scope THEN NULL ELSE %(by)s END,
+               decided_at = CASE WHEN s.in_scope THEN NULL ELSE now() END
+          FROM scope s
+         WHERE s.adjustment_id = p.adjustment_id AND (s.status = 'pending') <> s.in_scope
+        RETURNING p.status
         """,
-        (by,),
-    ).rowcount
-    restored = conn.execute(
-        """
-        UPDATE ref.price_adjustment p
-           SET status = 'pending', decided_by = NULL, decided_at = NULL
-          FROM adjustment_scope s
-         WHERE s.adjustment_id = p.adjustment_id AND s.status = 'out_of_scope' AND s.in_scope
-        """
-    ).rowcount
-    conn.execute("DROP TABLE adjustment_scope")
+        {"floor": floor_inr, "window": EVENT_WINDOW_DAYS, "by": by},
+    ).fetchall()
+    set_aside = sum(1 for (status,) in rows if status == "out_of_scope")
+    restored = len(rows) - set_aside
     return set_aside, restored
 
 

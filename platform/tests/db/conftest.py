@@ -66,6 +66,10 @@ def create_migrated(admin_url: str, name: str) -> tuple[str, str, list[str]]:
         # As on Azure, where azure_pg_admin owns public: the owner role cannot create there.
         conn.execute("ALTER SCHEMA public OWNER TO CURRENT_USER")
         conn.execute("REVOKE CREATE ON SCHEMA public FROM PUBLIC")
+        # cagr_test grants no temporary tables to the platform logins either.
+        conn.execute(
+            sql.SQL("REVOKE TEMPORARY ON DATABASE {} FROM PUBLIC").format(sql.Identifier(name))
+        )
     platform_url = _with(admin_url, user="cagr_platform", password=PLATFORM_PASSWORD, db=name)
     applied = migrate.apply(platform_url)
     return _with(admin_url, db=name), platform_url, applied
