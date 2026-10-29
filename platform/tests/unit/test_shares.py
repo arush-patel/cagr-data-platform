@@ -1,8 +1,8 @@
 """Share periods from reports and the walk through corporate actions (spec 0007, 5.3)."""
 
 from datetime import date
-from itertools import pairwise
 from decimal import Decimal as D
+from itertools import pairwise
 
 import pytest
 
