@@ -10,6 +10,7 @@ commits nothing; a refused decision raises a ReviewError whose message can be sh
         --note "not a split"
     uv run python -m cagr_data.reference.review approve listing_change 4021 --into 377 --as arush
     uv run python -m cagr_data.reference.review propose-merge 4021 --into 377 --as arush
+    uv run python -m cagr_data.reference.review approve-renames --as arush
 
 What a decision writes:
 - ref.listing_change: status, decided_by, decided_at and note; a new row for a proposed merge.
@@ -200,6 +201,34 @@ def approve(
     _decide(conn, item, item_id, "applied", by, note)
 
 
+def approve_index_renames(
+    conn: Connection, by: str, note: str | None = None
+) -> tuple[list[int], list[int]]:
+    """Approve every pending index_rename with exactly one candidate, merging the renamed index
+    into it. Returns the change_ids (approved, left pending): an item with no candidate or
+    several, or whose merge is refused, stays pending for a person to decide."""
+    rows = conn.execute(
+        "SELECT change_id, evidence->'candidates' FROM ref.listing_change"
+        " WHERE kind = 'index_rename' AND status = 'pending' ORDER BY effective_date, change_id"
+    ).fetchall()
+    approved: list[int] = []
+    left: list[int] = []
+    for change_id, candidates in rows:
+        if not candidates or len(candidates) != 1:
+            left.append(change_id)
+            continue
+        conn.execute("SAVEPOINT rename")
+        try:
+            approve(conn, "listing_change", change_id, by, note, into_id=int(candidates[0]))
+        except ReviewError:
+            conn.execute("ROLLBACK TO SAVEPOINT rename")
+            left.append(change_id)
+            continue
+        conn.execute("RELEASE SAVEPOINT rename")
+        approved.append(change_id)
+    return approved, left
+
+
 def reject(conn: Connection, item: Item, item_id: int, by: str, note: str | None = None) -> None:
     """Reject a pending item. Nothing else changes: a rejected merge leaves two listings, and a
     rejected adjustment leaves prices as they are."""
@@ -261,6 +290,9 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument("--note")
         if name == "approve":
             p.add_argument("--into", type=int)
+    p = sub.add_parser("approve-renames", help="approve every index rename with one candidate")
+    p.add_argument("--as", dest="by", required=True)
+    p.add_argument("--note")
     p = sub.add_parser("propose-merge")
     p.add_argument("merged_id", type=int)
     p.add_argument("--into", type=int, required=True)
@@ -281,6 +313,9 @@ def main(argv: list[str] | None = None) -> int:
                 return 0
             if args.command == "approve":
                 approve(conn, args.item, args.item_id, args.by, args.note, into_id=args.into)
+            elif args.command == "approve-renames":
+                approved, left = approve_index_renames(conn, args.by, args.note)
+                print(f"{len(approved)} index renames approved, {len(left)} left pending: {left}")
             elif args.command == "reject":
                 reject(conn, args.item, args.item_id, args.by, args.note)
             else:

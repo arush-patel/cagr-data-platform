@@ -1,0 +1,49 @@
+# The indices the platform tracks (spec 0008), one per line, by the current name in NSE's
+# index-close file. Edit this list in a pull request; the universe build reads it.
+
+# Broad market and size
+Nifty 50
+Nifty Next 50
+Nifty 100
+Nifty 200
+Nifty 500
+Nifty Total Market
+NIFTY LargeMidcap 250
+Nifty Midcap 150
+NIFTY Midcap 100
+Nifty Midcap 50
+Nifty MidSmallcap 400
+Nifty Smallcap 250
+NIFTY Smallcap 100
+Nifty Smallcap 50
+Nifty Microcap 250
+
+# Volatility: no turnover, but the market's fear gauge
+India VIX
+
+# Sectors, including every sector index in ref.industry
+Nifty Bank
+Nifty Private Bank
+Nifty PSU Bank
+Nifty Financial Services
+Nifty Capital Markets
+Nifty IT
+Nifty Auto
+Nifty Pharma
+Nifty Healthcare Index
+Nifty FMCG
+Nifty India Consumption
+Nifty Consumer Durables
+Nifty Metal
+Nifty Commodities
+Nifty Energy
+Nifty Oil & Gas
+Nifty Infrastructure
+Nifty Realty
+Nifty Media
+Nifty Chemicals
+Nifty India Defence
+Nifty PSE
+Nifty CPSE
+Nifty MNC
+Nifty Services Sector

@@ -54,11 +54,11 @@ SELECT ch.change_id AS id, ch.listing_id, l.name, l.board, ch.effective_date AS 
 """
 
 # Pending: oldest first. Decided: what a person decided, newest first; rows the rules applied
-# on their own are not review history.
+# on their own, and items the scope rule set aside (spec 0008), are not review history.
 _FILTER = {
     "pending": ("WHERE {t}.status = 'pending'", "ORDER BY {t}.created_at, id"),
     "decided": (
-        "WHERE {t}.status <> 'pending' AND {t}.decided_by IS NOT NULL",
+        "WHERE {t}.status IN ('applied', 'rejected') AND {t}.decided_by IS NOT NULL",
         "ORDER BY {t}.decided_at DESC, id DESC LIMIT 200",
     ),
 }

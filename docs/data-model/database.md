@@ -58,10 +58,11 @@ flowchart LR
 | `listing_change` | Change to a listing, made or waiting for review |
 | `index_alias` | Old index name and the current name it maps to |
 | `corporate_action` | Parsed corporate action |
-| `price_adjustment` | Price adjustment, applied, pending or rejected |
+| `price_adjustment` | Price adjustment, applied, pending, rejected or out of scope |
 | `listing_shares` | Period of a listing's shares outstanding |
 | `industry`, `listing_industry`, `industry_change` | Industry; a listing's industry; every assignment |
 | `listing_tier` | NSE index tier period (empty for now) |
+| `tracked_listing` | Listing the platform tracks: an EQ-series main-board equity or a listed index |
 
 ### `clean`
 
@@ -85,6 +86,7 @@ flowchart LR
 |---|---|
 | `raw.nse_cm_bar_current`, `raw.nse_index_close_current`, ... | Raw rows from one file per day. Where NSE has two files (both price formats in early 2024, or a re-published file), the preferred one, latest revision |
 | `ref.listing_current` | Every listing with its current symbol and ISIN |
+| `ref.tracked_current` | What we track, with each listing's current symbol and ISIN and why it's tracked |
 | `ref.listings_as_of(date)` | Listings on a date, with that day's symbol and ISIN |
 | `ref.listing_by_symbol(symbol, date)` | The listing that held a symbol on a date |
 | `ref.listing_classification(date)` | Each listing's industry, sector index and tier |

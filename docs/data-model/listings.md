@@ -99,6 +99,32 @@ These are stored in `ref.price_adjustment`. A listing and ex-date that already h
 proposed again, so a rejected item stays rejected. An applied factor is never edited: a correction
 rejects the row and adds a new one.
 
+## What we track
+
+NSE lists far more than institutions trade, so the platform follows a smaller set, the
+**tracked universe** (spec 0008). It's in `ref.tracked_current`:
+
+| Tracked | Rule |
+|---|---|
+| Equities (`eq_main`) | Main-board equity listings that traded in the EQ series on some day |
+| Indices (`index`) | The indices named in `platform/src/cagr_data/reference/tracked_indices.txt`: broad market and size, India VIX, and the sector indices |
+
+Raw data is still collected for everything NSE publishes; only review is scoped for now.
+
+A pending price adjustment stays in the review queue only if the listing is a tracked equity,
+the bar on or after its ex-date is in the EQ series, and the listing reached the universe floor
+(₹1,500 crore market cap) on some day. Every other item is set to `out_of_scope` with
+`decided_by` = `scope`. Its note and numbers are kept, and it goes back to `pending` if a
+later rebuild finds it in scope.
+
+```sh
+uv run python -m cagr_data.reference.universe --dry-run   # what would change, then roll back
+uv run python -m cagr_data.reference.universe             # rebuild the list and scope the queue
+```
+
+To track another index, add its current name to `tracked_indices.txt` in a pull request. The
+build stops if a name matches no index, or more than one.
+
 ## Review
 
 Anything left `pending` in `ref.listing_change` or `ref.price_adjustment` is decided by a person,
@@ -108,9 +134,13 @@ on the Observatory's [review page](../observatory/README.md) or from the command
 uv run python -m cagr_data.reference.review list
 uv run python -m cagr_data.reference.review approve price_adjustment 813 --as arush
 uv run python -m cagr_data.reference.review reject listing_change 812 --as arush --note "different company"
+uv run python -m cagr_data.reference.review approve-renames --as arush   # every index rename with one candidate
 ```
 
 - Whoever proposed an item can't decide it.
 - Approving a possible merge moves the newer listing's symbols and ISINs to the older one, and marks
   the newer one `merged`.
+- `approve-renames` approves each pending `index_rename` that has exactly one old index to join,
+  such as NSE's CNX to Nifty renaming. The rest stay pending.
+- Items set aside as `out_of_scope` aren't on the review page or in its history.
 - The `review_waiting` check warns when an item has waited more than 3 sessions.

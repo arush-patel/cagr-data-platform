@@ -15,6 +15,9 @@ two commands.
 | Mondays 07:00 | Fetch holiday lists and rebuild the calendar | `nse_holidays`, `xnse_calendar` |
 | Backfill only | Shares of index members, 2010 to 2013 | `nse_index_issue_cap` |
 
+NSE publishes only today's company, SME and ETF lists and symbol changes, so a day the 07:30 run
+misses can't be fetched later. They have been collected since 29 Oct 2026.
+
 Daily assets have one partition per calendar day from 1 Jan 2010, weekends included, because NSE
 sometimes trades on a weekend. On a day with no trading, NSE answers "not found", and that is
 expected.
@@ -45,12 +48,14 @@ Dagster doesn't run these yet. Run them after the files are in, in this order:
 ```sh
 uv run python -m cagr_data.reference.listing_build            # listings, corporate actions, ref checks
 uv run python -m cagr_data.clean.bars 2026-10-01 2026-10-26   # bars, adjustments, shares, clean checks
+uv run python -m cagr_data.reference.universe                 # tracked list, scope new review items
 ```
 
 | Command | Does | Details |
 |---|---|---|
 | `reference.listing_build` | Carries listings forward from the last day built, then parses corporate actions. Takes `--through DATE` (default today). | [Listings](../data-model/listings.md) |
 | `clean.bars START END` | Rebuilds bars for the range, proposes price adjustments, rebuilds share periods and weekly and monthly bars | [Clean bars](../data-model/clean-bars.md) |
+| `reference.universe` | Rebuilds the tracked list and sets aside the review items outside it | [What we track](../data-model/listings.md#what-we-track) |
 
 Both run as the pipeline login, record an `ops.run`, and are safe to run again. Then decide any
 new review items on the [Observatory](../observatory/README.md).

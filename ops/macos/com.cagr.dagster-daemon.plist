@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- The Dagster daemon as a macOS login item (docs/operations/running.md, section 4).
+     Replace HOME_DIR with your home folder and UV with the output of `which uv`, copy it to
+     ~/Library/LaunchAgents/ and load it with launchctl. It holds no passwords: uv reads them
+     from .env when the daemon starts. -->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.cagr.dagster-daemon</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>UV</string>
+        <string>run</string>
+        <string>--env-file</string>
+        <string>.env</string>
+        <string>dagster-daemon</string>
+        <string>run</string>
+        <string>-m</string>
+        <string>cagr_data.orchestration.definitions</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>HOME_DIR/cagr-data-platform</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>DAGSTER_HOME</key>
+        <string>HOME_DIR/.dagster</string>
+    </dict>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>ThrottleInterval</key>
+    <integer>60</integer>
+    <key>StandardOutPath</key>
+    <string>HOME_DIR/.dagster/daemon.log</string>
+    <key>StandardErrorPath</key>
+    <string>HOME_DIR/.dagster/daemon.log</string>
+</dict>
+</plist>
