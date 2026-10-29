@@ -126,3 +126,27 @@ def test_writer_can_decide(db: Conn) -> None:
     _, _, change_id = _split_after_silence(db)
     db.execute("SET ROLE cagr_writer")
     review.approve(db, "listing_change", change_id, "arush")
+
+
+def test_index_renames_are_approved_in_bulk(db: Conn) -> None:
+    book = Book(PgStore(db))
+    book.apply_indices(date(2024, 1, 1), 1, ["CNX IT", "CNX Bank"], [])
+    book.apply_indices(date(2024, 1, 2), 2, ["Nifty IT", "Nifty Bank"], [])
+    rows = db.execute(
+        "SELECT change_id, jsonb_array_length(evidence->'candidates') FROM ref.listing_change"
+        " WHERE kind = 'index_rename' AND status = 'pending' ORDER BY change_id"
+    ).fetchall()
+    assert [n for _, n in rows] == [2, 2]  # either old index could be the one renamed
+    assert review.approve_index_renames(db, "arush") == ([], [c for c, _ in rows])
+    db.execute(
+        "UPDATE ref.listing_change SET evidence = jsonb_set(evidence, '{candidates}',"
+        " evidence->'candidates'->0 || '[]'::jsonb) WHERE change_id = %s",
+        (rows[0][0],),
+    )
+    approved, left = review.approve_index_renames(db, "arush", "CNX to Nifty renaming")
+    assert (approved, left) == ([rows[0][0]], [rows[1][0]])
+    status = db.execute(
+        "SELECT status, decided_by, note FROM ref.listing_change WHERE change_id = %s",
+        (rows[0][0],),
+    ).fetchone()
+    assert status == ("applied", "arush", "CNX to Nifty renaming")

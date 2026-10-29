@@ -43,11 +43,29 @@ uv run python -m cagr_data.core.migrate          # run it
 
 ## 4. Run the pipeline
 
+On Arush's laptop the Dagster daemon runs as a login item, so the schedules fire whenever the
+laptop is awake (and the database tunnel is up). The login item is
+[`ops/macos/com.cagr.dagster-daemon.plist`](../../ops/macos/com.cagr.dagster-daemon.plist). It
+holds no passwords: `uv run --env-file .env` reads them when the daemon starts.
+
 ```sh
-uv run dagster dev -m cagr_data.orchestration.definitions    # opens http://localhost:3000
+# once: fill in HOME_DIR and UV in the plist, then
+cp ops/macos/com.cagr.dagster-daemon.plist ~/Library/LaunchAgents/
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.cagr.dagster-daemon.plist
+DAGSTER_HOME=~/.dagster uv run --env-file .env dagster schedule start --start-all \
+    -m cagr_data.orchestration.definitions
+tail ~/.dagster/daemon.log                                            # is it running?
+launchctl bootout gui/$(id -u)/com.cagr.dagster-daemon                 # stop it
 ```
 
-Turn the schedules on in the UI. See [NSE daily pipeline](../pipeline/nse-daily.md) for what they do.
+To watch runs in a browser, or without the login item:
+
+```sh
+DAGSTER_HOME=~/.dagster uv run --env-file .env dagster dev -m cagr_data.orchestration.definitions
+```
+
+That opens http://localhost:3000, where schedules can also be turned on. See
+[NSE daily pipeline](../pipeline/nse-daily.md) for what they do.
 
 To load past dates instead:
 
