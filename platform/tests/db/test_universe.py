@@ -100,6 +100,7 @@ def test_only_big_eq_items_stay_pending(db: Conn) -> None:
     small = _pending(db, ids["SMALL"], DAYS[1])
     only_be = _pending(db, ids["ONLYBE"], DAYS[1])
     tiny = _pending(db, ids["TINY"], DAYS[1])
+    db.execute("SET ROLE cagr_writer")  # as the pipeline runs it
     universe.build_tracked(db, [])
     assert universe.scope_adjustments(db, floor_inr=1_500 * CRORE) == (4, 0)
     assert _status(db, big_eq) == ("pending", None, "price jump, no action explains it")
@@ -111,6 +112,7 @@ def test_only_big_eq_items_stay_pending(db: Conn) -> None:
 def test_a_wider_scope_brings_items_back(db: Conn) -> None:
     ids = _seed(db)
     small = _pending(db, ids["SMALL"], DAYS[1])
+    db.execute("SET ROLE cagr_writer")
     universe.build_tracked(db, [])
     universe.scope_adjustments(db, floor_inr=1_500 * CRORE)
     assert universe.scope_adjustments(db, floor_inr=50 * CRORE) == (0, 1)
