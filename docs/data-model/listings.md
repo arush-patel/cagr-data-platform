@@ -96,7 +96,9 @@ whose close jumps against the previous close (below 0.75 times or above 1.33 tim
 | A jump with no action before 1 Oct 2026, near a clean ratio (1:2, 1:5, ...) with an ISIN change | Applied automatically and marked, because NSE's old announcements are incomplete |
 
 These are stored in `ref.price_adjustment`. A listing and ex-date that already has a row is never
-proposed again, so a rejected item stays rejected. An applied factor is never edited: a correction
+proposed again, so a rejected item stays rejected. An item the rules left `pending` (or set aside
+as `out_of_scope`) is decided again on every build: once a parser fix or a new announcement
+explains it, it is applied without a person. An applied factor is never edited: a correction
 rejects the row and adds a new one.
 
 ## What we track

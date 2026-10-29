@@ -116,7 +116,7 @@ class ParsedAction:
 _NUM = r"(\d+(?:\.\d+)?)"
 _RS = r"r[se]\.?\s*"  # Rs, Re, Rs., Re.
 _FV_CHANGE = re.compile(_RS + _NUM + r"\D*?to\s*" + _RS + _NUM, re.I)
-_SPLIT = re.compile(r"split|spl\b|spl\s*" + _RS + r"|sub-?\s*division", re.I)
+_SPLIT = re.compile(r"split|splt|spl\b|spl\s*" + _RS + r"|sub-?\s*division", re.I)
 _CONSOLIDATION = re.compile(r"consolidat", re.I)
 _BONUS = re.compile(r"\bbon(?:us)?\b\s*-?\s*(\d+)\s*:\s*(\d+)", re.I)
 _BONUS_DEBENTURE = re.compile(r"\bbonus\s*deb", re.I)

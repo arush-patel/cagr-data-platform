@@ -7,7 +7,9 @@ An event is a listing's traded session that either follows the ex-date of a pric
 or jumps (the close against the previous traded close is below 0.75 or above 1.33). The factor
 comes from the parsed actions; the jump confirms it. What the rules can't decide is left pending
 for review. A listing and ex-date that already has a row, whatever its status, is never proposed
-again, so a rerun adds nothing and a rejected item stays rejected. Reads closes from clean.bar_1d,
+again, so a rerun adds nothing and a rejected item stays rejected. A rules item still pending (or
+set aside as out of scope) is decided again on each run, so a parser fix that explains it
+applies it. Reads closes from clean.bar_1d,
 so it runs after the daily bars and before the adjustment steps.
 """
 
@@ -147,11 +149,13 @@ class AdjustmentsResult:
     events: int = 0
     applied: int = 0
     pending: int = 0
+    redecided: int = 0  # undecided rules items the rules applied this run
     by_note: dict[str, int] = field(default_factory=dict)
 
 
 def _events(conn: Connection, start: date, end: date) -> list[Event]:
-    """Events from start to end on listings that don't have a row for the ex-date yet."""
+    """Events from start to end on listings that don't have a row for the ex-date yet, or whose
+    row is a rules item still undecided (pending or out of scope)."""
     rows = conn.execute(
         """
         WITH b AS (
@@ -186,7 +190,9 @@ def _events(conn: Connection, start: date, end: date) -> list[Event]:
                 OR b.close / b.prev NOT BETWEEN %(below)s AND %(above)s)
            AND NOT EXISTS (SELECT 1 FROM ref.price_adjustment p
                             WHERE p.listing_id = b.listing_id
-                              AND p.ex_date = coalesce(a.ex_date, b.date))
+                              AND p.ex_date = coalesce(a.ex_date, b.date)
+                              AND NOT (p.proposed_by = 'rules'
+                                       AND p.status IN ('pending', 'out_of_scope')))
          ORDER BY 2, 1
         """,
         {"from": start - LOOKBACK, "start": start, "end": end, "below": JUMP_BELOW,
@@ -209,16 +215,33 @@ def _action(a: list[Any]) -> Action:
 def build_adjustments(
     conn: Connection, start: date, end: date, history_before: date = HISTORY_BEFORE
 ) -> AdjustmentsResult:
-    """Propose an adjustment for every new event from start to end, in the caller's
-    transaction."""
+    """Propose an adjustment for every new event from start to end, and apply an undecided rules
+    item the rules can now decide, in the caller's transaction."""
     result = AdjustmentsResult()
+    undecided = {
+        (r[1], r[2]): r[0]
+        for r in conn.execute(
+            "SELECT adjustment_id, listing_id, ex_date FROM ref.price_adjustment"
+            " WHERE proposed_by = 'rules' AND status IN ('pending', 'out_of_scope')"
+            " AND ex_date BETWEEN %s AND %s",
+            (start - LOOKBACK, end),
+        ).fetchall()
+    }
     inserts: list[tuple[Any, ...]] = []
+    updates: list[tuple[Any, ...]] = []
     for event in _events(conn, start, end):
         result.events += 1
         p = decide(event, history_before)
         if p is None:
             continue
         applied = p.status == "applied"
+        existing = undecided.get((event.listing_id, event.ex_date))
+        if existing is not None:
+            if applied:
+                result.redecided += 1
+                result.by_note[p.note] = result.by_note.get(p.note, 0) + 1
+                updates.append((p.factor, p.expected, p.action_id, p.note, existing))
+            continue
         result.applied += applied
         result.pending += not applied
         result.by_note[p.note] = result.by_note.get(p.note, 0) + 1
@@ -236,6 +259,16 @@ def build_adjustments(
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'rules', %s, %s)
             """,
             inserts,
+        )
+        cur.executemany(
+            """
+            UPDATE ref.price_adjustment
+               SET status = 'applied', auto = true, factor = %s, expected_factor = %s,
+                   action_id = %s, note = %s, applied_at = now(), decided_by = NULL,
+                   decided_at = NULL
+             WHERE adjustment_id = %s
+            """,
+            updates,
         )
     return result
 
@@ -280,7 +313,8 @@ def main(argv: list[str] | None = None) -> int:
     with connect(secret.get_secret_value()) as conn:
         result = build_adjustments(conn, args.start, args.end)
         conn.commit()
-    print(f"{result.events} events: {result.applied} applied, {result.pending} pending")
+    print(f"{result.events} events: {result.applied} applied, {result.pending} pending,"
+          f" {result.redecided} earlier items applied")  # fmt: skip
     for note, n in sorted(result.by_note.items(), key=lambda kv: -kv[1]):
         print(f"  {n:6d}  {note}")
     return 0

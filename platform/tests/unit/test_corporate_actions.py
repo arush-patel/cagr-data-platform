@@ -25,6 +25,8 @@ def one(subject: str, face_value: str | None = "10") -> ParsedAction:
         ("Face Value Split (Sub-Division) - From Rs 2/- Per Share To Re 1/- Per Share", 2, 1),
         ("Fv Split Rs.10 To Re.1", 10, 1),
         ("Fv Split Rs.10/- To Rs.2/-", 10, 2),
+        ("Fv Splt Frm Rs 10 To Re 1", 10, 1),  # JSWSTEEL, 4 Jan 2017
+        ("Fv Splt Frm Rs 10 To Rs 2", 10, 2),  # KARURVYSYA, 17 Nov 2016
     ],
 )
 def test_splits(subject: str, old: int, new: int) -> None:

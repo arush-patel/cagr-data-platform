@@ -208,6 +208,29 @@ def test_adjustments_from_actions_and_jumps(db: Conn) -> None:
     assert [r[0] for r in adjusted] == [50.0, 51.0, 51.0, 52.0, 50.0, 53.0]
 
 
+@pytest.mark.parametrize("status", ["pending", "out_of_scope"])
+def test_an_undecided_item_is_applied_once_its_action_is_known(db: Conn, status: str) -> None:
+    ids = _seed(db)
+    build_daily(db, DAYS[0], DAYS[-1])
+    rel = ids["RELIANCE"]
+    assert build_adjustments(db, DAYS[0], DAYS[-1]).pending == 1  # a jump, no action yet
+    if status == "out_of_scope":
+        db.execute("UPDATE ref.price_adjustment SET status = 'out_of_scope',"
+                   " decided_by = 'scope', decided_at = now()")  # fmt: skip
+    again = build_adjustments(db, DAYS[0], DAYS[-1])
+    assert (again.applied, again.pending, again.redecided) == (0, 0, 0)  # still undecided
+
+    _bonus(db, rel, DAYS[2])  # e.g. a parser fix reads the announcement
+    result = build_adjustments(db, DAYS[0], DAYS[-1])
+    assert (result.applied, result.pending, result.redecided) == (0, 0, 1)
+    rows = db.execute(
+        "SELECT ex_date, factor, status, auto, decided_by, note, action_id IS NOT NULL"
+        " FROM ref.price_adjustment"
+    ).fetchall()
+    assert rows == [(DAYS[2], 0.5, "applied", True, None, "confirmed by the close", True)]
+    assert build_adjustments(db, DAYS[0], DAYS[-1]).events == 0
+
+
 def _mcap(db: Conn, day: date, rows: list[tuple[str, int, float]]) -> None:
     file_id = _file(db, "nse_mcap", day)
     for symbol, issue_size, market_cap in rows:
