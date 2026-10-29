@@ -2,6 +2,7 @@
 
 from datetime import date
 from decimal import Decimal as D
+from itertools import pairwise
 
 import pytest
 
@@ -43,19 +44,37 @@ def test_reported_changes_open_new_periods() -> None:
     ]
 
 
-def test_index_reports_then_a_gap_walked_back_from_2024() -> None:
+def test_index_reports_then_a_gap_spread_to_2024() -> None:
     runs = [
         Run(FIRST, date(2013, 12, 31), 400, "index_file"),
         Run(MCAP, date(2026, 10, 23), 1000, "nse_mcap"),
     ]
-    # A 1:1 bonus in 2016 explains 800 of the 1,000; the other 200 are a fresh issue.
+    # A 1:1 bonus in 2016 explains 800 of the 1,000; the other 200 are spread from 2014 to 2024.
     periods = build_periods(FIRST, runs, [Event(date(2016, 7, 1), 2.0)])
-    assert periods[0] == Period(FIRST, date(2016, 7, 1), 400, "index_file",
+    assert periods[0] == Period(FIRST, date(2014, 1, 1), 400, "index_file",
                                 {"next_report_ratio": 1.25})  # fmt: skip
-    assert periods[1:] == [
-        Period(date(2016, 7, 1), MCAP, 1000, "walk_back"),
-        Period(MCAP, None, 1000, "nse_mcap"),
+    spread = periods[1:-1]
+    assert [p.valid_from for p in spread][:3] == [date(2014, 1, 1), date(2014, 4, 1),
+                                                    date(2014, 7, 1)]  # fmt: skip
+    assert {p.source for p in spread} == {"spread"}
+    assert spread[0].evidence == {"spread_ratio": 1.25}
+    assert date(2016, 7, 1) in [p.valid_from for p in spread]  # the bonus is a step too
+    shares = [p.shares for p in spread]
+    assert shares == sorted(shares) and 400 <= shares[0] < 405  # grows from 400 ...
+    assert 990 < shares[-1] < 1000  # ... to just under the next report
+    assert all(a.valid_to == b.valid_from for a, b in pairwise(periods))
+    assert periods[-1] == Period(MCAP, None, 1000, "nse_mcap")
+
+
+def test_a_short_gap_keeps_the_walk_back() -> None:
+    runs = [
+        Run(FIRST, date(2010, 3, 1), 400, "index_file"),
+        Run(date(2010, 4, 1), date(2013, 12, 31), 500, "index_file"),
     ]
+    periods = build_periods(FIRST, runs, [])
+    assert periods[0] == Period(FIRST, date(2010, 4, 1), 400, "index_file",
+                                {"next_report_ratio": 1.25})  # fmt: skip
+    assert "spread" not in {p.source for p in periods}
 
 
 def test_delisted_after_its_last_index_report_walks_forward() -> None:
