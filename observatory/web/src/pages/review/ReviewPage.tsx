@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { getItems, type Item, type ItemKind } from "../../api/client";
@@ -76,8 +76,12 @@ export function ReviewPage() {
     setSearch(next, { replace: true });
   };
 
+  // The last decision stays in view on the next item, so a wrong button is noticed at once.
+  const [lastDecided, setLastDecided] = useState<Item | null>(null);
+
   // After a decision, open the next item in the list, or the empty page after the last one.
   const next = (decided: Item) => {
+    setLastDecided(decided);
     const list = items ?? [];
     const at = list.findIndex((i) => i.kind === decided.kind && i.id === decided.id);
     const following = list[at + 1] ?? (at > 0 ? list[at - 1] : undefined);
@@ -154,6 +158,13 @@ export function ReviewPage() {
         </div>
       </aside>
       <section className="item">
+        {lastDecided && (
+          <p className={`last-decided ${lastDecided.status}`} role="status">
+            {lastDecided.status === "applied" ? "Approved" : "Rejected"}{" "}
+            <strong>{lastDecided.symbol ?? `listing ${lastDecided.listing_id}`}</strong> · {lastDecided.title}
+            {lastDecided.note && <> · “{lastDecided.note}”</>}
+          </p>
+        )}
         {kind === "adjustment" && id !== undefined && <AdjustmentView id={id} onDecided={next} />}
         {kind === "change" && id !== undefined && <ChangeView id={id} onDecided={next} />}
         {(kind === undefined || id === undefined) && (

@@ -1,4 +1,4 @@
-import { fireEvent, screen } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 
 import type { AdjustmentDetail, ChangeDetail, Item } from "../../api/client";
 import { refused, renderApp } from "../../test-utils";
@@ -98,6 +98,13 @@ const mergeDetail: ChangeDetail = {
   ],
 };
 
+// Decisions wait SETTLE_MS after an item opens, so a double click can't decide the next one.
+async function ready(name: string | RegExp) {
+  const button = await screen.findByRole("button", { name });
+  await waitFor(() => expect(button).toBeEnabled(), { timeout: 2000 });
+  return button;
+}
+
 const responses = {
   "/api/health": { version: "0.1.0", database: true, detail: null, reviewer: "arush" },
   "/api/review/items?status=pending": [jump, merge],
@@ -160,8 +167,11 @@ test("approve records the decision and opens the next item", async () => {
     ...responses,
     "POST /api/review/items/adjustment/7/approve": { ...jump, status: "applied", decided_by: "arush" },
   });
-  fireEvent.click(await screen.findByRole("button", { name: "Approve ×100" }));
+  const approveButton = await screen.findByRole("button", { name: "Approve ×100" });
+  expect(approveButton).toBeDisabled(); // just opened: a stray click does nothing yet
+  fireEvent.click(await ready("Approve ×100"));
   expect(await screen.findByText(merge.reason)).toBeInTheDocument();
+  expect(screen.getByRole("status")).toHaveTextContent("Approved KAUSH");
   const post = fetch.mock.calls.find(([, init]) => init?.method === "POST");
   expect(JSON.parse(String(post?.[1]?.body))).toEqual({ note: null, into_id: null });
 });
@@ -171,7 +181,7 @@ test("reject needs a note, and a refusal is shown in words", async () => {
     ...responses,
     "POST /api/review/items/adjustment/7/reject": refused("adjustment 7 is already applied"),
   });
-  const rejectButton = await screen.findByRole("button", { name: "Reject" });
+  const rejectButton = await ready("Reject");
   fireEvent.click(rejectButton);
   expect(await screen.findByText(/Write in the note why you reject it/)).toBeInTheDocument();
   expect(screen.getByRole("textbox")).toHaveFocus();
@@ -182,7 +192,7 @@ test("reject needs a note, and a refusal is shown in words", async () => {
 
 test("a merge names the listing it merges into", async () => {
   renderApp("/review/change/3", responses);
-  expect(await screen.findByRole("button", { name: "Approve: merge into OLDCO" })).toBeEnabled();
+  expect(await ready("Approve: merge into OLDCO")).toBeEnabled();
 });
 
 test("without a reviewer the page only reads", async () => {
