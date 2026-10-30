@@ -115,9 +115,22 @@ Raw data is still collected for everything NSE publishes; only review is scoped 
 
 A pending price adjustment stays in the review queue only if the listing is a tracked equity,
 the bar on or after its ex-date is in the EQ series, and the listing reached the universe floor
-(₹1,500 crore market cap) on some day. Every other item is set to `out_of_scope` with
-`decided_by` = `scope`. Its note and numbers are kept, and it goes back to `pending` if a
-later rebuild finds it in scope.
+(₹1,500 crore market cap) on some day. Items that pass are then checked against the rules
+below, which catch moves that are real trading, not a change to the shares. Every item set aside
+becomes `out_of_scope` with `decided_by` = `scope` and a `scope_reason`. Its note and numbers
+are kept, and it goes back to `pending` if a later rebuild no longer sets it aside.
+
+| `scope_reason` | When |
+|---|---|
+| `outside_universe` | Not a tracked equity, the bar isn't EQ, or the listing never reached the floor |
+| `real_move` | No action within 3 days of the ex-date and no ISIN change, unless the drop is close to 1/n (n ≥ 2), as an unannounced split would be |
+| `small_demerger` | A demerger whose price moved less than 5%: the part spun off is too small to price |
+| `unparsed_dividend` | The only unparsed action is a dividend (or "other") and the price fell 5% or less |
+| `illiquid` | The median value traded over the 20 sessions before is under ₹5 crore a day, and no split, bonus or consolidation is announced |
+
+A possible merge in `ref.listing_change` is set aside as `illiquid` when both listings traded
+under ₹1 crore a day (the median over 20 sessions around the gap). Set-aside merges keep their
+payload and come back to `pending` if either side was liquid.
 
 ```sh
 uv run python -m cagr_data.reference.universe --dry-run   # what would change, then roll back
@@ -144,5 +157,6 @@ uv run python -m cagr_data.reference.review approve-renames --as arush   # every
   the newer one `merged`.
 - `approve-renames` approves each pending `index_rename` that has exactly one old index to join,
   such as NSE's CNX to Nifty renaming. The rest stay pending.
-- Items set aside as `out_of_scope` aren't on the review page or in its history.
+- Items set aside as `out_of_scope` aren't on the review page or in its history. Their
+  `scope_reason` says why.
 - The `review_waiting` check warns when an item has waited more than 3 sessions.
