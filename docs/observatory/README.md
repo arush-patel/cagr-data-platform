@@ -73,7 +73,9 @@ value.
 An item waiting more than 3 sessions is marked, as the `review_waiting` check warns. Keys `j`
 and `k` move through the queue as sorted and filtered, `a` approves and `r` rejects. A rejection
 needs a note saying why: Reject (the button or `r`) with an empty note moves to the note box and
-asks for one. After a decision the next item opens.
+asks for one. After a decision the next item opens, with the decision just made named at its
+top, so a wrong button is noticed at once. The buttons and keys wait 0.8 s after an item opens,
+and a held key doesn't repeat, so a double click can't decide the next item too.
 
 ### API
 

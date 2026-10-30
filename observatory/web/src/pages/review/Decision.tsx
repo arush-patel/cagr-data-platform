@@ -14,6 +14,10 @@ type Props = {
   onDecided: (item: Item) => void;
 };
 
+// After a decision the next item opens in the same place, so a double click or a held key
+// would decide it too. Buttons and keys wait this long after an item opens.
+export const SETTLE_MS = 800;
+
 // Approve or reject (spec 0005, section 4.3). A note is optional to approve and required to
 // reject, so the history explains itself. Keys: a approves, r rejects (or moves to the note).
 export function Decision({ item, approveLabel, approveEffect, rejectEffect, choices, onDecided }: Props) {
@@ -23,6 +27,11 @@ export function Decision({ item, approveLabel, approveEffect, rejectEffect, choi
   const [intoId, setIntoId] = useState<number | null>(null);
   const noteBox = useRef<HTMLTextAreaElement>(null);
   const [askNote, setAskNote] = useState(false);
+  const [settled, setSettled] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setSettled(true), SETTLE_MS);
+    return () => clearTimeout(timer);
+  }, []);
 
   const decide = useMutation({
     mutationFn: (action: "approve" | "reject") =>
@@ -36,14 +45,15 @@ export function Decision({ item, approveLabel, approveEffect, rejectEffect, choi
   });
 
   const needsChoice = Boolean(choices?.length) && intoId === null;
-  const canApprove = !decide.isPending && !needsChoice;
-  const canReject = !decide.isPending && note.trim().length > 0;
+  const ready = settled && !decide.isPending;
+  const canApprove = ready && !needsChoice;
+  const canReject = ready && note.trim().length > 0;
 
   // A rejection needs a reason. Without one, Reject points to the note box instead of doing
   // nothing.
   function tryReject() {
     if (canReject) decide.mutate("reject");
-    else if (!decide.isPending) {
+    else if (ready) {
       setAskNote(true);
       noteBox.current?.focus();
     }
@@ -53,7 +63,7 @@ export function Decision({ item, approveLabel, approveEffect, rejectEffect, choi
     function onKey(event: KeyboardEvent) {
       const target = event.target;
       if (target instanceof HTMLTextAreaElement || target instanceof HTMLInputElement) return;
-      if (target instanceof HTMLSelectElement) return;
+      if (target instanceof HTMLSelectElement || event.repeat) return;
       if (event.key === "a" && canApprove) decide.mutate("approve");
       if (event.key === "r") {
         event.preventDefault();
@@ -121,7 +131,7 @@ export function Decision({ item, approveLabel, approveEffect, rejectEffect, choi
         <button type="button" className="approve" disabled={!canApprove} onClick={() => decide.mutate("approve")}>
           {approveLabel}
         </button>
-        <button type="button" className="reject" disabled={decide.isPending} onClick={tryReject}>
+        <button type="button" className="reject" disabled={!ready} onClick={tryReject}>
           Reject
         </button>
       </div>

@@ -532,3 +532,20 @@ main {
   opacity: 0.45;
   cursor: not-allowed;
 }
+
+.last-decided {
+  margin: 0 0 16px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  background: var(--panel);
+  font-size: 14px;
+  border-left: 3px solid var(--muted);
+}
+
+.last-decided.applied {
+  border-left-color: var(--good);
+}
+
+.last-decided.rejected {
+  border-left-color: var(--bad);
+}
