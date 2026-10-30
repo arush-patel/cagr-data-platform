@@ -71,8 +71,9 @@ value.
 | Possible merge or rename | Each listing's closes, 40 traded sessions either side of the date. A rename or a re-listed security carries on at the level the old one stopped at |
 
 An item waiting more than 3 sessions is marked, as the `review_waiting` check warns. Keys `j`
-and `k` move through the queue as sorted and filtered, `a` approves and `r` rejects (or moves to
-the note, which a rejection needs). After a decision the next item opens.
+and `k` move through the queue as sorted and filtered, `a` approves and `r` rejects. A rejection
+needs a note saying why: Reject (the button or `r`) with an empty note moves to the note box and
+asks for one. After a decision the next item opens.
 
 ### API
 
