@@ -55,7 +55,7 @@ flowchart LR
 | `calendar_exception`, `calendar_session` | Holiday or special session; calendar day |
 | `listing` | Security, for its whole life |
 | `listing_symbol`, `listing_isin` | Symbol or ISIN a listing had, with dates |
-| `listing_change` | Change to a listing, made or waiting for review |
+| `listing_change` | Change to a listing: applied, pending, rejected or out of scope |
 | `index_alias` | Old index name and the current name it maps to |
 | `corporate_action` | Parsed corporate action |
 | `price_adjustment` | Price adjustment, applied, pending, rejected or out of scope |

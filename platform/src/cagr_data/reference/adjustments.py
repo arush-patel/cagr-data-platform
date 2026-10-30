@@ -265,7 +265,7 @@ def build_adjustments(
             UPDATE ref.price_adjustment
                SET status = 'applied', auto = true, factor = %s, expected_factor = %s,
                    action_id = %s, note = %s, applied_at = now(), decided_by = NULL,
-                   decided_at = NULL
+                   decided_at = NULL, scope_reason = NULL
              WHERE adjustment_id = %s
             """,
             updates,

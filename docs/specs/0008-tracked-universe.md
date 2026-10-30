@@ -39,6 +39,12 @@ the indices that matter. The review queue holds only items about those, so Arush
    stays pending only if its listing is a tracked equity, its event bar is in the EQ series, and
    the listing reached ₹1,500 crore on some day. Other items become `out_of_scope`, and come back
    if the scope widens.
+6. **Moves that are real trading are set aside too** (decided 30 Oct 2026, after Arush checked
+   POLICYBZR, TVSHLTD, KSE and MBECL on charts). Each carries a `scope_reason`:
+   `real_move` (no action and no ISIN change, unless the drop is near 1/n), `small_demerger`
+   (under 5%), `unparsed_dividend` (fell 5% or less) and `illiquid` (median value traded under
+   ₹5 crore a day, unless a split, bonus or consolidation is announced). Possible merges are set
+   aside as `illiquid` when both sides traded under ₹1 crore a day.
 5. **Index renames with one candidate are approved in bulk**, by a person, with one command.
 
 ## 4. Schema (migration 0015)
@@ -48,6 +54,8 @@ the indices that matter. The review queue holds only items about those, so Arush
 | `ref.tracked_listing` | `listing_id`, `reason` (`eq_main` or `index`), `built_at`; rebuilt whole |
 | `ref.tracked_current` (view) | The tracked listings with their current symbol, ISIN, name and status |
 | `ref.price_adjustment.status` | Adds `out_of_scope`, which needs `decided_by` and has no `applied_at` |
+| `scope_reason` on `ref.price_adjustment` and `ref.listing_change` (migration 0017) | Why an item is `out_of_scope`; set exactly when the status is |
+| `ref.listing_change.status` (migration 0017) | Adds `out_of_scope` |
 
 ## 5. Plan
 
@@ -56,6 +64,7 @@ the indices that matter. The review queue holds only items about those, so Arush
 | 1 | Migration 0015, `cagr_data.reference.universe`, `review approve-renames`, docs | This PR |
 | 2 | On `cagr_test`: approve the renames, then build the universe and scope the queue | About 312 adjustments pending |
 | 3 | Scope the clean builds and checks to the tracked set | Faster builds, checks only on what we trade |
+| 4 | Migration 0017 and the scope reasons (rule 6) | About 60 adjustments and no merges pending |
 
 ## 6. Questions
 

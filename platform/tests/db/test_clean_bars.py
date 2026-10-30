@@ -216,6 +216,7 @@ def test_an_undecided_item_is_applied_once_its_action_is_known(db: Conn, status:
     assert build_adjustments(db, DAYS[0], DAYS[-1]).pending == 1  # a jump, no action yet
     if status == "out_of_scope":
         db.execute("UPDATE ref.price_adjustment SET status = 'out_of_scope',"
+                   " scope_reason = 'real_move',"
                    " decided_by = 'scope', decided_at = now()")  # fmt: skip
     again = build_adjustments(db, DAYS[0], DAYS[-1])
     assert (again.applied, again.pending, again.redecided) == (0, 0, 0)  # still undecided
