@@ -22,6 +22,7 @@ export function Decision({ item, approveLabel, approveEffect, rejectEffect, choi
   const [note, setNote] = useState("");
   const [intoId, setIntoId] = useState<number | null>(null);
   const noteBox = useRef<HTMLTextAreaElement>(null);
+  const [askNote, setAskNote] = useState(false);
 
   const decide = useMutation({
     mutationFn: (action: "approve" | "reject") =>
@@ -38,16 +39,25 @@ export function Decision({ item, approveLabel, approveEffect, rejectEffect, choi
   const canApprove = !decide.isPending && !needsChoice;
   const canReject = !decide.isPending && note.trim().length > 0;
 
+  // A rejection needs a reason. Without one, Reject points to the note box instead of doing
+  // nothing.
+  function tryReject() {
+    if (canReject) decide.mutate("reject");
+    else if (!decide.isPending) {
+      setAskNote(true);
+      noteBox.current?.focus();
+    }
+  }
+
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
-      if (event.target instanceof HTMLTextAreaElement || event.target instanceof HTMLInputElement) return;
+      const target = event.target;
+      if (target instanceof HTMLTextAreaElement || target instanceof HTMLInputElement) return;
+      if (target instanceof HTMLSelectElement) return;
       if (event.key === "a" && canApprove) decide.mutate("approve");
       if (event.key === "r") {
-        if (canReject) decide.mutate("reject");
-        else {
-          event.preventDefault();
-          noteBox.current?.focus();
-        }
+        event.preventDefault();
+        tryReject();
       }
     }
     window.addEventListener("keydown", onKey);
@@ -103,6 +113,7 @@ export function Decision({ item, approveLabel, approveEffect, rejectEffect, choi
           rows={2}
           value={note}
           placeholder="Optional to approve; needed to reject"
+          aria-invalid={askNote && !note.trim()}
           onChange={(e) => setNote(e.target.value)}
         />
       </label>
@@ -110,10 +121,11 @@ export function Decision({ item, approveLabel, approveEffect, rejectEffect, choi
         <button type="button" className="approve" disabled={!canApprove} onClick={() => decide.mutate("approve")}>
           {approveLabel}
         </button>
-        <button type="button" className="reject" disabled={!canReject} onClick={() => decide.mutate("reject")}>
+        <button type="button" className="reject" disabled={decide.isPending} onClick={tryReject}>
           Reject
         </button>
       </div>
+      {askNote && !note.trim() && <p className="error">Write in the note why you reject it, then press Reject again.</p>}
       {decide.isError && <p className="error">{decide.error.message}</p>}
     </form>
   );

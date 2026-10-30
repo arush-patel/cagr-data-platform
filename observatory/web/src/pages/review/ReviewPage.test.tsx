@@ -172,7 +172,9 @@ test("reject needs a note, and a refusal is shown in words", async () => {
     "POST /api/review/items/adjustment/7/reject": refused("adjustment 7 is already applied"),
   });
   const rejectButton = await screen.findByRole("button", { name: "Reject" });
-  expect(rejectButton).toBeDisabled();
+  fireEvent.click(rejectButton);
+  expect(await screen.findByText(/Write in the note why you reject it/)).toBeInTheDocument();
+  expect(screen.getByRole("textbox")).toHaveFocus();
   fireEvent.change(screen.getByRole("textbox"), { target: { value: "a series move" } });
   fireEvent.click(rejectButton);
   expect(await screen.findByText("adjustment 7 is already applied")).toBeInTheDocument();
